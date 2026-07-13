@@ -1,0 +1,10 @@
+{
+  "name": "chatgpt-session-converter",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Browser-only batch converter for ChatGPT, CPA, sub2api, Cockpit and related JSON formats.",
+  "scripts": {
+    "test": "node tests/convert-session.test.js"
+  },
+  "license": "MIT"
+}

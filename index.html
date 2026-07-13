@@ -1,0 +1,1257 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data:; connect-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'">
+  <meta name="referrer" content="no-referrer">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="在浏览器本地批量合并 JSON，或将每条记录打包为独立 JSON 文件 ZIP。">
+  <title>JSON Workbench | 批量 JSON 工具</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --ink: #17262d;
+      --muted: #68767b;
+      --line: #d7e1df;
+      --panel: rgba(255, 255, 255, .88);
+      --paper: #f8fbfa;
+      --teal: #1c6d6a;
+      --teal-dark: #145451;
+      --teal-soft: #e3f2f0;
+      --orange: #cb6d3d;
+      --orange-soft: #fff0e8;
+      --shadow: 0 22px 60px rgba(31, 67, 69, .10);
+    }
+
+    * { box-sizing: border-box; }
+
+    html { min-width: 320px; background: #edf5f3; }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      color: var(--ink);
+      background:
+        linear-gradient(135deg, rgba(255,255,255,.68), transparent 42%),
+        #edf5f3;
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      letter-spacing: 0;
+    }
+
+    button, input, textarea { font: inherit; }
+
+    button { cursor: pointer; }
+
+    button:disabled { cursor: not-allowed; opacity: .46; }
+
+    .shell {
+      width: min(1440px, calc(100% - 36px));
+      margin: 0 auto;
+      padding: 34px 0 42px;
+    }
+
+    .topbar {
+      display: flex;
+      align-items: end;
+      justify-content: space-between;
+      gap: 28px;
+      margin-bottom: 24px;
+    }
+
+    .eyebrow {
+      margin: 0 0 8px;
+      color: var(--teal);
+      font-size: 12px;
+      font-weight: 800;
+      letter-spacing: .16em;
+      text-transform: uppercase;
+    }
+
+    h1, h2, p { margin-top: 0; }
+
+    h1 {
+      max-width: 740px;
+      margin-bottom: 12px;
+      font-size: clamp(32px, 4vw, 58px);
+      line-height: 1.03;
+      letter-spacing: -.03em;
+    }
+
+    .intro {
+      max-width: 670px;
+      margin-bottom: 0;
+      color: var(--muted);
+      font-size: 15px;
+      line-height: 1.7;
+    }
+
+    .local-note {
+      display: flex;
+      align-items: center;
+      gap: 9px;
+      align-self: center;
+      padding: 10px 14px;
+      border: 1px solid var(--line);
+      border-radius: 9px;
+      background: rgba(255,255,255,.68);
+      color: #35545a;
+      font-size: 13px;
+      white-space: nowrap;
+    }
+
+    .local-note::before {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: #2e9a75;
+      content: "";
+      box-shadow: 0 0 0 4px #d9f1e7;
+    }
+
+    .toolbar {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-bottom: 14px;
+    }
+
+    .tag {
+      padding: 8px 12px;
+      border: 1px solid #d5e1df;
+      border-radius: 8px;
+      background: rgba(255,255,255,.77);
+      color: #35515a;
+      font-size: 13px;
+      font-weight: 700;
+    }
+
+    .tag.accent { border-color: #b9d9d5; background: var(--teal-soft); color: var(--teal-dark); }
+
+    .workspace {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+      gap: 16px;
+      align-items: stretch;
+    }
+
+    .panel {
+      min-width: 0;
+      overflow: hidden;
+      border: 1px solid rgba(206, 220, 218, .92);
+      border-radius: 10px;
+      background: var(--panel);
+      box-shadow: var(--shadow);
+    }
+
+    .panel-head {
+      display: flex;
+      align-items: start;
+      justify-content: space-between;
+      gap: 16px;
+      padding: 22px 24px 18px;
+      border-bottom: 1px solid var(--line);
+    }
+
+    .panel-kicker {
+      margin-bottom: 7px;
+      color: var(--teal);
+      font-size: 11px;
+      font-weight: 800;
+      letter-spacing: .14em;
+      text-transform: uppercase;
+    }
+
+    h2 {
+      margin-bottom: 7px;
+      font-size: 20px;
+      line-height: 1.2;
+      letter-spacing: -.015em;
+    }
+
+    .panel-head p {
+      max-width: 540px;
+      margin-bottom: 0;
+      color: var(--muted);
+      font-size: 13px;
+      line-height: 1.55;
+    }
+
+    .panel-body { padding: 18px 24px 24px; }
+
+    .dropzone {
+      display: grid;
+      min-height: 184px;
+      place-items: center;
+      padding: 28px;
+      border: 1px dashed #9abebb;
+      border-radius: 9px;
+      background: #f1f9f7;
+      text-align: center;
+      transition: border-color .18s ease, background .18s ease, transform .18s ease;
+    }
+
+    .dropzone.dragover {
+      border-color: var(--orange);
+      background: var(--orange-soft);
+      transform: translateY(-1px);
+    }
+
+    .drop-title { margin-bottom: 7px; font-size: 18px; font-weight: 800; }
+    .drop-copy { margin-bottom: 16px; color: var(--muted); font-size: 13px; line-height: 1.5; }
+
+    .button-row, .output-actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 9px;
+      align-items: center;
+    }
+
+    .button {
+      flex: 0 0 auto;
+      min-height: 40px;
+      padding: 9px 14px;
+      border: 1px solid #cbdad8;
+      border-radius: 8px;
+      background: #fff;
+      color: var(--ink);
+      font-size: 13px;
+      font-weight: 750;
+      white-space: nowrap;
+      transition: border-color .18s ease, background .18s ease, color .18s ease, transform .18s ease;
+    }
+
+    .button:hover:not(:disabled) { border-color: var(--teal); transform: translateY(-1px); }
+    .button.primary { border-color: var(--teal); background: var(--teal); color: white; }
+    .button.primary:hover:not(:disabled) { border-color: var(--teal-dark); background: var(--teal-dark); }
+    .button.warm { border-color: #e7bba7; background: var(--orange-soft); color: #9d4d29; }
+    .button.ghost { background: transparent; }
+
+    .file-input { display: none; }
+
+    .paste-label {
+      display: block;
+      margin: 20px 0 8px;
+      color: #314b50;
+      font-size: 12px;
+      font-weight: 800;
+      letter-spacing: .08em;
+      text-transform: uppercase;
+    }
+
+    textarea {
+      width: 100%;
+      resize: vertical;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: #fbfdfd;
+      color: var(--ink);
+      font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+      font-size: 12px;
+      line-height: 1.6;
+      outline: none;
+      transition: border-color .18s ease, box-shadow .18s ease;
+    }
+
+    textarea:focus { border-color: var(--teal); box-shadow: 0 0 0 3px rgba(28,109,106,.12); }
+
+    #pasteInput { min-height: 134px; padding: 13px 14px; }
+    #output { min-height: 360px; padding: 15px; }
+
+    .file-list {
+      display: grid;
+      gap: 8px;
+      margin-top: 16px;
+    }
+
+    .file-list:empty { display: none; }
+
+    .file-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 10px 12px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: rgba(255,255,255,.78);
+    }
+
+    .file-meta { min-width: 0; }
+    .file-name { overflow: hidden; color: #27454b; font-size: 13px; font-weight: 750; text-overflow: ellipsis; white-space: nowrap; }
+    .file-detail { margin-top: 3px; color: var(--muted); font-size: 11px; }
+    .file-status { flex: 0 0 auto; font-size: 11px; font-weight: 800; }
+    .file-status.ok { color: #2e806d; }
+    .file-status.error { color: #b15436; }
+    .remove-file { min-height: 30px; padding: 4px 8px; font-size: 12px; }
+
+    .stats {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 9px;
+      margin-bottom: 17px;
+    }
+
+    .stat {
+      min-width: 0;
+      padding: 13px 14px 12px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: #f3f8f7;
+    }
+
+    .stat-value {
+      display: block;
+      overflow: hidden;
+      margin-bottom: 5px;
+      color: var(--ink);
+      font-size: 21px;
+      font-weight: 850;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .stat-label { color: var(--muted); font-size: 11px; }
+
+    .section-label {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      margin: 18px 0 8px;
+      color: #314b50;
+      font-size: 12px;
+      font-weight: 800;
+      letter-spacing: .08em;
+      text-transform: uppercase;
+    }
+
+    .section-label span { color: var(--muted); font-size: 11px; font-weight: 600; letter-spacing: 0; text-transform: none; }
+
+    .preview {
+      overflow: auto;
+      max-height: 186px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: #fbfdfd;
+    }
+
+    table { width: 100%; border-collapse: collapse; font-size: 12px; }
+    th, td { padding: 11px 12px; border-bottom: 1px solid #e3ecea; text-align: left; vertical-align: top; }
+    th { background: #f1f7f5; color: #5a6f73; font-size: 10px; letter-spacing: .08em; text-transform: uppercase; }
+    td { color: #3b565b; }
+    tbody tr:last-child td { border-bottom: 0; }
+    .empty-row { color: var(--muted); text-align: center; }
+
+    .output-actions { margin-top: 16px; }
+
+    .format-switch {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      margin-bottom: 14px;
+      padding: 5px;
+      border: 1px solid var(--line);
+      border-radius: 9px;
+      background: #f1f7f5;
+    }
+
+    .format-button {
+      min-height: 35px;
+      padding: 7px 11px;
+      border: 1px solid transparent;
+      border-radius: 7px;
+      background: transparent;
+      color: #5d7074;
+      font-size: 12px;
+      font-weight: 800;
+    }
+
+    .format-button:hover { color: var(--teal-dark); }
+    .format-button[aria-pressed="true"] { border-color: #b9d9d5; background: white; color: var(--teal-dark); box-shadow: 0 2px 7px rgba(31,67,69,.08); }
+
+    .status {
+      min-height: 21px;
+      margin: 12px 0 0;
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.5;
+    }
+
+    .status.success { color: #2e806d; }
+    .status.warning { color: #9d5b2d; }
+    .status.error { color: #b15436; }
+
+    .format-notice {
+      min-height: 38px;
+      margin: -6px 0 14px;
+      padding: 9px 11px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: #fbfdfd;
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.55;
+    }
+
+    .format-notice.warning { border-color: #e7bba7; background: var(--orange-soft); color: #8d4c2c; }
+    .format-notice.error { border-color: #dfaaa0; background: #fff2ef; color: #a34835; }
+
+    .footer-note {
+      display: flex;
+      justify-content: space-between;
+      gap: 20px;
+      padding: 16px 2px 0;
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.5;
+    }
+
+    @media (max-width: 900px) {
+      .topbar { align-items: start; flex-direction: column; gap: 16px; }
+      .local-note { align-self: start; }
+      .workspace { grid-template-columns: 1fr; }
+      #output { min-height: 300px; }
+    }
+
+    @media (max-width: 560px) {
+      .shell { width: min(100% - 22px, 1440px); padding-top: 22px; }
+      h1 { font-size: 34px; }
+      .panel-head, .panel-body { padding-right: 16px; padding-left: 16px; }
+      .stats { gap: 6px; }
+      .stat { padding: 11px 10px; }
+      .stat-value { font-size: 18px; }
+      .dropzone { min-height: 160px; padding: 20px 14px; }
+      .file-row { align-items: start; }
+      .footer-note { flex-direction: column; gap: 4px; }
+    }
+  </style>
+</head>
+<body>
+  <main class="shell">
+    <header class="topbar">
+      <div>
+        <p class="eyebrow">Local JSON Workbench</p>
+        <h1>批量 JSON 合并与打包</h1>
+        <p class="intro">选择或拖入多个 JSON 文件，在当前浏览器中完成解析。你可以导出一个合并后的 JSON，也可以把每条记录拆成独立 JSON 文件并下载 ZIP。</p>
+      </div>
+      <div class="local-note">文件只在本地浏览器中处理</div>
+    </header>
+
+    <nav class="toolbar" aria-label="工具特性">
+      <span class="tag accent">多文件输入</span>
+      <span class="tag">数组 / 单对象</span>
+      <span class="tag">拖拽导入</span>
+      <span class="tag">合并 JSON</span>
+      <span class="tag">独立 JSON ZIP</span>
+    </nav>
+
+    <section class="workspace" aria-label="JSON 转换工作区">
+      <article class="panel">
+        <div class="panel-head">
+          <div>
+            <div class="panel-kicker">01 / Input</div>
+            <h2>添加 JSON 文件</h2>
+            <p>支持单对象、数组和常见的逐行 JSON。多个文件会按记录顺序合并。</p>
+          </div>
+          <button class="button ghost" id="clearButton" type="button">清空</button>
+        </div>
+        <div class="panel-body">
+          <div class="dropzone" id="dropzone" role="group" aria-label="选择或拖入 JSON 文件">
+            <div>
+              <div class="drop-title">拖到这里，或选择文件</div>
+              <div class="drop-copy">一次可添加多个 .json 文件</div>
+              <div class="button-row">
+                <button class="button primary" id="browseButton" type="button">选择 JSON 文件</button>
+                <button class="button" id="sampleButton" type="button">载入示例</button>
+              </div>
+              <input class="file-input" id="fileInput" type="file" accept=".json,application/json,text/plain" multiple>
+            </div>
+          </div>
+
+          <label class="paste-label" for="pasteInput">或者直接粘贴 JSON</label>
+          <textarea id="pasteInput" spellcheck="false" placeholder="粘贴一个对象、数组，或多行 JSON 对象"></textarea>
+          <div class="file-list" id="fileList" aria-live="polite"></div>
+          <p class="status" id="inputStatus" aria-live="polite">等待输入。</p>
+        </div>
+      </article>
+
+      <article class="panel">
+        <div class="panel-head">
+          <div>
+            <div class="panel-kicker">02 / Output</div>
+            <h2>导出结果</h2>
+            <p id="outputDescription">合并下载会按当前选择的格式生成结果；ZIP 下载会为每条记录生成一个独立 JSON 文件。</p>
+          </div>
+        </div>
+        <div class="panel-body">
+          <div class="section-label">输出格式 <span id="formatDescription">sub2api 导入包</span></div>
+          <div class="format-switch" role="group" aria-label="输出格式">
+            <button class="format-button" type="button" data-format="sub2api" aria-pressed="true">sub2api</button>
+            <button class="format-button" type="button" data-format="cpa" aria-pressed="false">CPA</button>
+            <button class="format-button" type="button" data-format="cockpit" aria-pressed="false">Cockpit</button>
+            <button class="format-button" type="button" data-format="9router" aria-pressed="false">9router</button>
+            <button class="format-button" type="button" data-format="codex" aria-pressed="false">Codex</button>
+            <button class="format-button" type="button" data-format="axonhub" aria-pressed="false">AxonHub</button>
+            <button class="format-button" type="button" data-format="codexmanager" aria-pressed="false">Codex-Manager</button>
+          </div>
+          <p class="format-notice" id="formatNotice" aria-live="polite">载入账号后会检查当前格式所需字段。</p>
+          <div class="stats" aria-label="转换统计">
+            <div class="stat"><span class="stat-value" id="fileCount">0</span><span class="stat-label">来源文件</span></div>
+            <div class="stat"><span class="stat-value" id="recordCount">0</span><span class="stat-label">账号数</span></div>
+            <div class="stat"><span class="stat-value" id="warningCount">0</span><span class="stat-label">需注意</span></div>
+            <div class="stat"><span class="stat-value" id="invalidCount">0</span><span class="stat-label">跳过项</span></div>
+          </div>
+
+          <div class="section-label">记录预览 <span id="previewHint">暂无可预览记录</span></div>
+          <div class="preview">
+            <table>
+              <thead><tr><th>#</th><th>来源</th><th>格式</th><th>摘要</th></tr></thead>
+              <tbody id="previewBody"><tr><td class="empty-row" colspan="4">等待有效 JSON。</td></tr></tbody>
+            </table>
+          </div>
+
+          <div class="section-label">合并后的 JSON</div>
+          <textarea id="output" readonly spellcheck="false" placeholder="成功解析后会在这里生成合并 JSON。"></textarea>
+
+          <div class="output-actions">
+            <button class="button primary" id="downloadMergedButton" type="button" disabled>下载合并 JSON</button>
+            <button class="button warm" id="downloadZipButton" type="button" disabled>下载独立 JSON ZIP</button>
+            <button class="button" id="copyButton" type="button" disabled>复制</button>
+          </div>
+          <p class="status" id="outputStatus" aria-live="polite">暂无输出。</p>
+        </div>
+      </article>
+    </section>
+
+    <footer class="footer-note">
+      <span>不会上传文件，不写入 localStorage，关闭页面后数据即消失。</span>
+      <span id="formatState">输出格式：格式化 JSON</span>
+    </footer>
+  </main>
+
+  <script>
+    (() => {
+      "use strict";
+
+      const state = {
+        sources: [],
+        converted: [],
+        skipped: [],
+        duplicateCount: 0,
+        formatIssues: [],
+        format: "sub2api",
+        formatJson: true,
+      };
+
+      const $ = (selector) => document.querySelector(selector);
+      const els = {
+        fileInput: $("#fileInput"),
+        browseButton: $("#browseButton"),
+        sampleButton: $("#sampleButton"),
+        clearButton: $("#clearButton"),
+        dropzone: $("#dropzone"),
+        pasteInput: $("#pasteInput"),
+        fileList: $("#fileList"),
+        inputStatus: $("#inputStatus"),
+        fileCount: $("#fileCount"),
+        recordCount: $("#recordCount"),
+        warningCount: $("#warningCount"),
+        invalidCount: $("#invalidCount"),
+        previewHint: $("#previewHint"),
+        previewBody: $("#previewBody"),
+        output: $("#output"),
+        downloadMergedButton: $("#downloadMergedButton"),
+        downloadZipButton: $("#downloadZipButton"),
+        copyButton: $("#copyButton"),
+        outputStatus: $("#outputStatus"),
+        outputDescription: $("#outputDescription"),
+        formatNotice: $("#formatNotice"),
+        formatState: $("#formatState"),
+        formatDescription: $("#formatDescription"),
+        formatButtons: Array.from(document.querySelectorAll("[data-format]")),
+      };
+
+      const FORMAT_LABELS = {
+        sub2api: "sub2api",
+        cpa: "CPA",
+        cockpit: "Cockpit",
+        "9router": "9router",
+        codex: "Codex",
+        axonhub: "AxonHub",
+        codexmanager: "Codex-Manager",
+      };
+
+      const FORMAT_DESCRIPTIONS = {
+        sub2api: "sub2api 导入包",
+        cpa: "CPA / Codex auth JSON",
+        cockpit: "Cockpit Tools Codex JSON",
+        "9router": "9router Codex OAuth JSON",
+        codex: "Codex 原生 auth.json",
+        axonhub: "AxonHub Codex auth.json",
+        codexmanager: "Codex-Manager 批量导入 JSON",
+      };
+
+      const AXONHUB_PLACEHOLDER_REFRESH_TOKEN = "__missing_refresh_token__";
+
+      const sampleRecords = [
+        { type: "codex", account_id: "example-account-01", email: "alpha@example.com", access_token: "example-access-token-01", expired: "2099-01-01T00:00:00Z" },
+        { type: "codex", account_id: "example-account-02", email: "beta@example.com", access_token: "example-access-token-02", expired: "2099-02-01T00:00:00Z" },
+        { type: "codex", account_id: "example-account-03", email: "gamma@example.com", access_token: "example-access-token-03", expired: "2099-03-01T00:00:00Z" },
+      ];
+
+      function setStatus(element, message, kind = "") {
+        element.textContent = message;
+        element.className = `status ${kind}`.trim();
+      }
+
+      function formatBytes(bytes) {
+        if (!Number.isFinite(bytes) || bytes <= 0) return "0 B";
+        if (bytes < 1024) return `${bytes} B`;
+        if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+        return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+      }
+
+      function compact(value, max = 68) {
+        let result;
+        try { result = JSON.stringify(value); } catch { result = String(value); }
+        if (result.length <= max) return result;
+        return `${result.slice(0, max - 1)}…`;
+      }
+
+      function parseConcatenatedJson(text) {
+        const values = [];
+        let start = -1;
+        let depth = 0;
+        let quote = false;
+        let escaped = false;
+
+        for (let index = 0; index < text.length; index += 1) {
+          const char = text[index];
+          if (quote) {
+            if (escaped) escaped = false;
+            else if (char === "\\") escaped = true;
+            else if (char === '"') quote = false;
+            continue;
+          }
+          if (char === '"') { quote = true; continue; }
+          if (char === "{" || char === "[") {
+            if (depth === 0) start = index;
+            depth += 1;
+          } else if (char === "}" || char === "]") {
+            depth -= 1;
+            if (depth === 0 && start >= 0) {
+              const candidate = text.slice(start, index + 1);
+              try { values.push(JSON.parse(candidate)); } catch { return []; }
+              start = -1;
+            }
+          }
+        }
+        return depth === 0 ? values : [];
+      }
+
+      function parseJsonRecords(raw) {
+        const text = raw.replace(/^\uFEFF/, "").trim();
+        if (!text) throw new Error("内容为空");
+
+        try {
+          const parsed = JSON.parse(text);
+          return Array.isArray(parsed) ? parsed : [parsed];
+        } catch {
+          const lines = text.split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
+          if (lines.length > 1) {
+            try {
+              const parsedLines = lines.map((line) => JSON.parse(line));
+              return parsedLines.flatMap((value) => Array.isArray(value) ? value : [value]);
+            } catch { /* Try concatenated values below. */ }
+          }
+          const concatenated = parseConcatenatedJson(text);
+          if (concatenated.length) return concatenated.flatMap((value) => Array.isArray(value) ? value : [value]);
+          throw new Error("不是有效的 JSON、JSON 数组或逐行 JSON");
+        }
+      }
+
+      function isPlainObject(value) {
+        return Boolean(value) && typeof value === "object" && !Array.isArray(value);
+      }
+
+      function firstNonEmpty(...values) {
+        for (const value of values) {
+          if (typeof value === "string" && value.trim() !== "") return value.trim();
+        }
+        return undefined;
+      }
+
+      function normalizeBoolean(value, fallback = false) {
+        if (typeof value === "boolean") return value;
+        if (typeof value === "number" && Number.isFinite(value)) return value !== 0;
+        if (typeof value === "string") {
+          const normalized = value.trim().toLowerCase();
+          if (["true", "1", "yes", "on"].includes(normalized)) return true;
+          if (["false", "0", "no", "off", ""].includes(normalized)) return false;
+        }
+        return fallback;
+      }
+
+      function decodeBase64Url(value) {
+        const normalized = value.replace(/-/g, "+").replace(/_/g, "/");
+        const padded = normalized.padEnd(Math.ceil(normalized.length / 4) * 4, "=");
+        const binary = atob(padded);
+        const bytes = Uint8Array.from(binary, (char) => char.charCodeAt(0));
+        return new TextDecoder().decode(bytes);
+      }
+
+      function bytesToBase64Url(bytes) {
+        let binary = "";
+        for (let index = 0; index < bytes.length; index += 0x8000) binary += String.fromCharCode(...bytes.subarray(index, index + 0x8000));
+        return btoa(binary).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/g, "");
+      }
+
+      function encodeBase64UrlJson(value) {
+        return bytesToBase64Url(new TextEncoder().encode(JSON.stringify(value)));
+      }
+
+      function parseJwtPayload(token) {
+        if (typeof token !== "string" || token.trim() === "") return undefined;
+        const segments = token.split(".");
+        if (segments.length < 2) return undefined;
+        try { return JSON.parse(decodeBase64Url(segments[1])); } catch { return undefined; }
+      }
+
+      function getOpenAIAuthSection(payload) {
+        const auth = isPlainObject(payload) ? payload["https://api.openai.com/auth"] : undefined;
+        return isPlainObject(auth) ? auth : {};
+      }
+
+      function getOpenAIProfileSection(payload) {
+        const profile = isPlainObject(payload) ? payload["https://api.openai.com/profile"] : undefined;
+        return isPlainObject(profile) ? profile : {};
+      }
+
+      function normalizeTimestamp(value) {
+        if (value instanceof Date && !Number.isNaN(value.getTime())) return value.toISOString();
+        if (typeof value === "number" && Number.isFinite(value)) {
+          const date = new Date(value > 1e11 ? value : value * 1000);
+          return Number.isNaN(date.getTime()) ? undefined : date.toISOString();
+        }
+        if (typeof value !== "string" || value.trim() === "") return undefined;
+        const date = new Date(value);
+        return Number.isNaN(date.getTime()) ? undefined : date.toISOString();
+      }
+
+      function timestampFromUnixSeconds(value) {
+        const numeric = Number(value);
+        if (!Number.isFinite(numeric)) return undefined;
+        const date = new Date(numeric * 1000);
+        return Number.isNaN(date.getTime()) ? undefined : date.toISOString();
+      }
+
+      function unixSecondsFromJwtExp(value) {
+        const numeric = Number(value);
+        return Number.isFinite(numeric) && numeric > 0 ? Math.trunc(numeric) : undefined;
+      }
+
+      function epochSecondsFromValue(value) {
+        if (value === undefined || value === null || value === "") return 0;
+        const numeric = Number(value);
+        if (Number.isFinite(numeric)) return Math.trunc(numeric > 1e11 ? numeric / 1000 : numeric);
+        const parsed = Date.parse(String(value));
+        return Number.isFinite(parsed) ? Math.trunc(parsed / 1000) : 0;
+      }
+
+      function buildSyntheticCodexIdToken(email, accountId, planType, userId, expiresAt) {
+        if (!accountId) return undefined;
+        const now = Math.trunc(Date.now() / 1000);
+        const authInfo = { chatgpt_account_id: accountId };
+        const expires = epochSecondsFromValue(expiresAt) || now + 90 * 24 * 60 * 60;
+        if (planType) authInfo.chatgpt_plan_type = planType;
+        if (userId) {
+          authInfo.chatgpt_user_id = userId;
+          authInfo.user_id = userId;
+        }
+        const payload = { iat: now, exp: expires, "https://api.openai.com/auth": authInfo };
+        if (email) payload.email = email;
+        return `${encodeBase64UrlJson({ alg: "none", typ: "JWT", cpa_synthetic: true })}.${encodeBase64UrlJson(payload)}.synthetic`;
+      }
+
+      function getExpiresIn(expiresAt, now = new Date()) {
+        if (!expiresAt) return undefined;
+        const expiresMs = new Date(expiresAt).getTime();
+        return Number.isNaN(expiresMs) ? undefined : Math.max(0, Math.floor((expiresMs - now.getTime()) / 1000));
+      }
+
+      function getAxonHubLastRefresh(expiresAt, now = new Date()) {
+        const expiresMs = expiresAt ? new Date(expiresAt).getTime() : NaN;
+        return Number.isNaN(expiresMs) ? normalizeTimestamp(now) : new Date(expiresMs - 60 * 60 * 1000).toISOString();
+      }
+
+      function stripUnavailable(value) {
+        if (Array.isArray(value)) return value.map(stripUnavailable).filter((item) => item !== undefined);
+        if (isPlainObject(value)) {
+          const entries = Object.entries(value).map(([key, item]) => [key, stripUnavailable(item)]).filter(([, item]) => item !== undefined);
+          return entries.length ? Object.fromEntries(entries) : undefined;
+        }
+        return value === undefined || value === null || value === "" ? undefined : value;
+      }
+
+      function toEmailKey(email) {
+        if (typeof email !== "string") return undefined;
+        return email.trim().toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_+|_+$/g, "");
+      }
+
+      function collectSessionLikeObjects(value, sourceName = "pasted-json") {
+        const found = [];
+        const visited = new WeakSet();
+        function visit(item, path) {
+          if (!isPlainObject(item) && !Array.isArray(item)) return;
+          if (isPlainObject(item)) {
+            if (visited.has(item)) return;
+            visited.add(item);
+            const token = firstNonEmpty(item.accessToken, item.access_token, item.tokens?.accessToken, item.tokens?.access_token, item.token?.accessToken, item.token?.access_token, item.credentials?.accessToken, item.credentials?.access_token);
+            if (token) {
+              found.push({ value: item, sourceName, path });
+              return;
+            }
+            for (const [key, child] of Object.entries(item)) {
+              if (["accessToken", "access_token", "sessionToken", "session_token"].includes(key)) continue;
+              visit(child, `${path}.${key}`);
+            }
+            return;
+          }
+          item.forEach((child, index) => visit(child, `${path}[${index}]`));
+        }
+        visit(value, "$" );
+        return found;
+      }
+
+      function convertSession(record, options = {}) {
+        if (!isPlainObject(record)) throw new Error("session 不是 JSON 对象");
+        const accessToken = firstNonEmpty(record.accessToken, record.access_token, record.tokens?.accessToken, record.tokens?.access_token, record.token?.accessToken, record.token?.access_token, record.credentials?.accessToken, record.credentials?.access_token);
+        if (!accessToken) throw new Error("缺少 accessToken");
+        const sessionToken = firstNonEmpty(record.sessionToken, record.session_token, record.tokens?.sessionToken, record.tokens?.session_token, record.token?.sessionToken, record.token?.session_token, record.credentials?.session_token);
+        const refreshToken = firstNonEmpty(record.refreshToken, record.refresh_token, record.tokens?.refreshToken, record.tokens?.refresh_token, record.token?.refreshToken, record.token?.refresh_token, record.credentials?.refresh_token);
+        const inputIdToken = firstNonEmpty(record.idToken, record.id_token, record.tokens?.idToken, record.tokens?.id_token, record.token?.idToken, record.token?.id_token, record.credentials?.id_token);
+        const payload = parseJwtPayload(accessToken);
+        const idPayload = parseJwtPayload(inputIdToken);
+        const auth = getOpenAIAuthSection(payload);
+        const idAuth = getOpenAIAuthSection(idPayload);
+        const profile = getOpenAIProfileSection(payload);
+        const hasRefreshToken = Boolean(refreshToken);
+        const accessTokenExpiresAt = hasRefreshToken ? undefined : unixSecondsFromJwtExp(payload?.exp);
+        const expiresAt = firstNonEmpty(payload ? timestampFromUnixSeconds(payload.exp) : undefined, normalizeTimestamp(record.expires), normalizeTimestamp(record.expiresAt), normalizeTimestamp(record.expired), normalizeTimestamp(record.expires_at));
+        const email = firstNonEmpty(record.user?.email, record.email, record.meta?.label, record.label, record.credentials?.email, record.providerSpecificData?.email, profile.email, idPayload?.email, payload?.email);
+        const accountId = firstNonEmpty(record.account?.id, record.account_id, record.tokens?.accountId, record.tokens?.account_id, record.chatgptAccountId, record.chatgpt_account_id, record.meta?.chatgptAccountId, record.meta?.chatgpt_account_id, record.tokens?.chatgptAccountId, record.tokens?.chatgpt_account_id, record.providerSpecificData?.chatgptAccountId, record.providerSpecificData?.chatgpt_account_id, record.credentials?.chatgpt_account_id, auth.chatgpt_account_id, idAuth.chatgpt_account_id, record.provider === "codex" ? record.id : undefined);
+        const chatgptAccountId = firstNonEmpty(record.chatgptAccountId, record.chatgpt_account_id, record.meta?.chatgptAccountId, record.meta?.chatgpt_account_id, record.tokens?.chatgptAccountId, record.tokens?.chatgpt_account_id, record.providerSpecificData?.chatgptAccountId, record.providerSpecificData?.chatgpt_account_id, record.credentials?.chatgpt_account_id, auth.chatgpt_account_id, idAuth.chatgpt_account_id);
+        const workspaceId = firstNonEmpty(record.account?.workspaceId, record.account?.workspace_id, record.workspaceId, record.workspace_id, record.meta?.workspaceId, record.meta?.workspace_id, record.providerSpecificData?.workspaceId, record.providerSpecificData?.workspace_id, record.credentials?.workspace_id, payload?.workspace_id, idPayload?.workspace_id);
+        const userId = firstNonEmpty(record.user?.id, record.user_id, record.chatgptUserId, record.providerSpecificData?.chatgptUserId, record.providerSpecificData?.chatgpt_user_id, auth.chatgpt_user_id, auth.user_id, idAuth.chatgpt_user_id, idAuth.user_id);
+        const planType = firstNonEmpty(record.account?.planType, record.account?.plan_type, record.planType, record.plan_type, record.providerSpecificData?.chatgptPlanType, record.providerSpecificData?.chatgpt_plan_type, record.credentials?.plan_type, auth.chatgpt_plan_type, idAuth.chatgpt_plan_type);
+        const exportedAt = normalizeTimestamp(options.now || new Date());
+        const sourceLastRefresh = firstNonEmpty(normalizeTimestamp(record.last_refresh), normalizeTimestamp(record.lastRefresh), normalizeTimestamp(record.extra?.last_refresh), normalizeTimestamp(record.meta?.last_refresh));
+        const lastRefresh = sourceLastRefresh || exportedAt;
+        const expiresIn = getExpiresIn(expiresAt, options.now || new Date());
+        const sourceName = firstNonEmpty(options.sourceName, "pasted-json");
+        const sourceType = record.provider === "codex" && record.authType === "oauth" ? "9router" : "chatgpt_web_session";
+        const name = firstNonEmpty(email, sourceName, "ChatGPT Account");
+        const syntheticIdToken = !inputIdToken ? buildSyntheticCodexIdToken(email, accountId, planType, userId, expiresAt) : undefined;
+        const idToken = firstNonEmpty(inputIdToken, syntheticIdToken);
+        const isDisabled = normalizeBoolean(record.disabled, false);
+        const cpa = Object.fromEntries(Object.entries({ type: "codex", account_id: accountId, chatgpt_account_id: accountId, email, name, plan_type: planType, chatgpt_plan_type: planType, id_token: idToken, id_token_synthetic: Boolean(syntheticIdToken) || undefined, access_token: accessToken, refresh_token: refreshToken || "", session_token: sessionToken, last_refresh: lastRefresh, expired: expiresAt, disabled: isDisabled || undefined }).filter(([, value]) => value !== undefined && value !== null));
+        const cockpit = { type: "codex", id_token: idToken, access_token: accessToken, refresh_token: refreshToken || "", account_id: accountId, last_refresh: lastRefresh, email, expired: expiresAt, account_note: firstNonEmpty(record.account_note, record.accountInfo, record.account_info, record.note, record.notes, record.remark) };
+        const sub2apiAccount = stripUnavailable({ name: firstNonEmpty(name, email, sourceName, "ChatGPT Account"), platform: "openai", type: "oauth", expires_at: accessTokenExpiresAt, auto_pause_on_expired: accessTokenExpiresAt ? true : undefined, concurrency: 10, priority: 1, credentials: { access_token: accessToken, refresh_token: refreshToken, id_token: idToken, chatgpt_account_id: accountId, chatgpt_user_id: userId, email, expires_at: expiresAt, expires_in: expiresIn, plan_type: planType }, extra: { email, email_key: toEmailKey(email), name, auth_provider: firstNonEmpty(record.authProvider, record.auth_provider), source: sourceType, last_refresh: lastRefresh } });
+        const priority = record.priority !== "" && Number.isFinite(Number(record.priority)) ? Number(record.priority) : 9;
+        const isActive = typeof record.isActive === "boolean" ? record.isActive : !isDisabled;
+        const createdAt = normalizeTimestamp(record.createdAt) || exportedAt;
+        const updatedAt = normalizeTimestamp(record.updatedAt) || exportedAt;
+        const nineRouter = stripUnavailable({ accessToken, refreshToken, expiresAt, testStatus: firstNonEmpty(record.testStatus, record.test_status, "active"), expiresIn, providerSpecificData: { chatgptAccountId: accountId, chatgptPlanType: planType }, id: accountId, provider: "codex", authType: "oauth", name, email, priority, isActive, createdAt, updatedAt });
+        const axonHubRefreshToken = refreshToken || AXONHUB_PLACEHOLDER_REFRESH_TOKEN;
+        const codexAuthJson = { auth_mode: "chatgpt", OPENAI_API_KEY: null, tokens: { id_token: idToken, access_token: accessToken, refresh_token: refreshToken || "", account_id: accountId }, last_refresh: lastRefresh };
+        const axonHub = stripUnavailable({ auth_mode: "chatgpt", last_refresh: sourceLastRefresh || getAxonHubLastRefresh(expiresAt, options.now || new Date()), tokens: { access_token: accessToken, refresh_token: axonHubRefreshToken, id_token: idToken }, axonhub_refresh_token_placeholder: refreshToken ? undefined : true, axonhub_note: refreshToken ? undefined : "refresh_token is a placeholder; access_token works only until it expires." });
+        const codexManagerTokenHints = Object.fromEntries(Object.entries({ account_id: accountId, chatgpt_account_id: chatgptAccountId }).filter(([, value]) => value !== undefined && value !== null && value !== ""));
+        const codexManagerMeta = Object.fromEntries(Object.entries({ label: firstNonEmpty(name, email, sourceName, "ChatGPT Account"), workspace_id: workspaceId, chatgpt_account_id: chatgptAccountId, note: "Imported from ChatGPT session" }).filter(([, value]) => value !== undefined && value !== null && value !== ""));
+        const codexManager = { tokens: { access_token: accessToken, refresh_token: refreshToken || "", id_token: inputIdToken || "", ...codexManagerTokenHints }, meta: codexManagerMeta };
+        const canonicalAccountId = firstNonEmpty(accountId, chatgptAccountId);
+        const dedupeKey = canonicalAccountId
+          ? `account:${canonicalAccountId.toLowerCase()}`
+          : workspaceId && email
+            ? `workspace:${workspaceId.toLowerCase()}:${email.toLowerCase()}`
+            : email
+              ? `email:${email.toLowerCase()}`
+              : `token:${accessToken}`;
+        const completenessScore = (hasRefreshToken ? 8 : 0) + (inputIdToken ? 4 : 0) + (canonicalAccountId ? 2 : 0) + (email ? 1 : 0) + (expiresAt ? 1 : 0);
+        return { sourceName, sourcePath: options.sourcePath, email, name, accountId: canonicalAccountId, workspaceId, expiresAt, accessTokenExpiresAt, lastRefresh, hasRefreshToken, hasInputIdToken: Boolean(inputIdToken), hasIdToken: Boolean(idToken), hasSyntheticIdToken: Boolean(syntheticIdToken), dedupeKey, completenessScore, cpa, cockpit, nineRouter, codexAuthJson, axonHub, codexManager, sub2apiAccount };
+      }
+
+      function buildSub2apiDocument(converted, now = new Date()) {
+        return { exported_at: normalizeTimestamp(now), proxies: [], accounts: converted.map((item) => item.sub2apiAccount) };
+      }
+
+      function buildOutputDocument() {
+        if (state.format === "sub2api") return buildSub2apiDocument(state.converted);
+        const key = { cpa: "cpa", cockpit: "cockpit", "9router": "nineRouter", codex: "codexAuthJson", axonhub: "axonHub", codexmanager: "codexManager" }[state.format];
+        return state.converted.length === 1 ? state.converted[0][key] : state.converted.map((item) => item[key]);
+      }
+
+      function getZipRecord(converted) {
+        if (state.format === "sub2api") return converted.sub2apiAccount;
+        const key = { cpa: "cpa", cockpit: "cockpit", "9router": "nineRouter", codex: "codexAuthJson", axonhub: "axonHub", codexmanager: "codexManager" }[state.format];
+        return converted[key];
+      }
+
+      function deduplicateConverted(records) {
+        const byKey = new Map();
+        const order = [];
+        let duplicateCount = 0;
+
+        records.forEach((record) => {
+          const existing = byKey.get(record.dedupeKey);
+          if (!existing) {
+            byKey.set(record.dedupeKey, record);
+            order.push(record.dedupeKey);
+            return;
+          }
+
+          duplicateCount += 1;
+          if (record.completenessScore > existing.completenessScore) byKey.set(record.dedupeKey, record);
+        });
+
+        return { records: order.map((key) => byKey.get(key)), duplicateCount };
+      }
+
+      function getFormatIssues(record, format) {
+        const issues = [];
+        const add = (level, message) => {
+          if (!issues.some((issue) => issue.message === message)) issues.push({ level, message });
+        };
+
+        if (!record.hasRefreshToken) add("warning", "缺少真实 refresh_token，access token 过期后不能自动刷新");
+        if (!record.expiresAt && !record.hasRefreshToken) add("warning", "缺少 access token 过期时间");
+
+        if (["sub2api", "cpa", "cockpit", "codex", "axonhub"].includes(format)) {
+          if (!record.hasIdToken) add("error", "缺少 id_token");
+          else if (record.hasSyntheticIdToken) add("warning", "正在使用合成 id_token，目标工具可能拒绝认证");
+        }
+
+        if (format === "codexmanager" && !record.hasInputIdToken) add("error", "Codex-Manager 需要真实 id_token");
+        if (format === "codex" && !record.accountId) add("error", "Codex auth.json 缺少 account_id");
+        else if (["sub2api", "cpa", "cockpit", "9router", "codexmanager"].includes(format) && !record.accountId) add("warning", "缺少账号 ID，部分导入器可能无法识别账号");
+
+        return issues;
+      }
+
+      function renderFormatNotice() {
+        if (!state.converted.length) {
+          els.formatNotice.textContent = "载入账号后会检查当前格式所需字段。";
+          els.formatNotice.className = "format-notice";
+          return;
+        }
+
+        const errorRecords = new Set(state.formatIssues.filter((issue) => issue.level === "error").map((issue) => issue.recordIndex));
+        const affectedRecords = new Set(state.formatIssues.map((issue) => issue.recordIndex));
+        const orderedIssues = [
+          ...state.formatIssues.filter((issue) => issue.level === "error"),
+          ...state.formatIssues.filter((issue) => issue.level !== "error"),
+        ];
+        const messages = [...new Set(orderedIssues.map((issue) => issue.message))];
+        const summary = messages.slice(0, 3).join("；");
+        const remaining = messages.length > 3 ? `；另有 ${messages.length - 3} 项` : "";
+
+        if (errorRecords.size) {
+          els.formatNotice.textContent = `${errorRecords.size} 个账号缺少 ${FORMAT_LABELS[state.format]} 关键字段：${summary}${remaining}。仍可下载，但目标工具可能拒绝导入。`;
+          els.formatNotice.className = "format-notice error";
+        } else if (affectedRecords.size) {
+          els.formatNotice.textContent = `${affectedRecords.size} 个账号可导出，但需要注意：${summary}${remaining}。`;
+          els.formatNotice.className = "format-notice warning";
+        } else {
+          els.formatNotice.textContent = `${state.converted.length} 个账号已通过 ${FORMAT_LABELS[state.format]} 字段检查。`;
+          els.formatNotice.className = "format-notice";
+        }
+      }
+
+      function sourceLabel(source) {
+        return source.name === "粘贴内容" ? source.name : source.name;
+      }
+
+      function createFileSource(file) {
+        return file.text().then((text) => {
+          try {
+            const records = parseJsonRecords(text);
+            return { name: file.name, size: file.size, records, accountCount: collectSessionLikeObjects(records, file.name).length, error: "" };
+          } catch (error) {
+            return { name: file.name, size: file.size, records: [], accountCount: 0, error: error.message };
+          }
+        });
+      }
+
+      function addSources(newSources) {
+        state.sources.push(...newSources);
+        render();
+      }
+
+      function removeSource(index) {
+        state.sources.splice(index, 1);
+        render();
+      }
+
+      function refreshPasteSource() {
+        const text = els.pasteInput.value.trim();
+        state.sources = state.sources.filter((source) => source.name !== "粘贴内容");
+        if (text) {
+          try {
+            const records = parseJsonRecords(text);
+            state.sources.push({ name: "粘贴内容", size: new TextEncoder().encode(text).length, records, accountCount: collectSessionLikeObjects(records, "粘贴内容").length, error: "" });
+          } catch (error) {
+            state.sources.push({ name: "粘贴内容", size: new TextEncoder().encode(text).length, records: [], accountCount: 0, error: error.message });
+          }
+        }
+        render();
+      }
+
+      function loadSample() {
+        els.pasteInput.value = JSON.stringify(sampleRecords, null, 2);
+        refreshPasteSource();
+        setStatus(els.inputStatus, "已载入 3 条示例记录，可直接测试导出。", "success");
+      }
+
+      function clearAll() {
+        state.sources = [];
+        els.fileInput.value = "";
+        els.pasteInput.value = "";
+        render();
+      }
+
+      function renderFiles() {
+        els.fileList.innerHTML = state.sources.map((source, index) => {
+          const status = source.error ? "解析失败" : `${source.accountCount ?? collectSessionLikeObjects(source.records, source.name).length} 个账号`;
+          const statusClass = source.error ? "error" : "ok";
+          return `<div class="file-row">
+            <div class="file-meta">
+              <div class="file-name" title="${escapeHtml(sourceLabel(source))}">${escapeHtml(sourceLabel(source))}</div>
+              <div class="file-detail">${formatBytes(source.size)}${source.error ? ` · ${escapeHtml(source.error)}` : ""}</div>
+            </div>
+            <span class="file-status ${statusClass}">${status}</span>
+            <button class="button remove-file" type="button" data-remove-index="${index}" aria-label="移除 ${escapeHtml(sourceLabel(source))}">移除</button>
+          </div>`;
+        }).join("");
+      }
+
+      function renderPreview() {
+        if (!state.converted.length) {
+          els.previewBody.innerHTML = '<tr><td class="empty-row" colspan="4">等待有效 JSON。</td></tr>';
+          els.previewHint.textContent = "暂无可预览记录";
+          return;
+        }
+
+        const rows = state.converted.slice(0, 12).map((converted, index) => {
+          const output = getZipRecord(converted);
+          return `<tr><td>${index + 1}</td><td title="${escapeHtml(converted.sourceName || "未知")}">${escapeHtml(converted.sourceName || "未知")}</td><td>${escapeHtml(FORMAT_LABELS[state.format])}</td><td title="${escapeHtml(compact(output))}">${escapeHtml(compact(output))}</td></tr>`;
+        }).join("");
+        els.previewBody.innerHTML = rows;
+        els.previewHint.textContent = state.converted.length > 12 ? `显示前 12 条，共 ${state.converted.length} 条` : `${state.converted.length} 条账号`;
+      }
+
+      function render() {
+        const candidates = [];
+        state.skipped = [];
+        state.sources.forEach((source) => {
+          collectSessionLikeObjects(source.records, source.name).forEach((session) => {
+            try {
+              candidates.push(convertSession(session.value, { sourceName: session.sourceName, sourcePath: session.path }));
+            } catch (error) {
+              state.skipped.push({ sourceName: session.sourceName, error: error.message });
+            }
+          });
+        });
+        const deduplicated = deduplicateConverted(candidates);
+        state.converted = deduplicated.records;
+        state.duplicateCount = deduplicated.duplicateCount;
+        state.formatIssues = state.converted.flatMap((record, recordIndex) => getFormatIssues(record, state.format).map((issue) => ({ ...issue, recordIndex })));
+        const invalid = state.sources.filter((source) => source.error).length;
+        const failed = invalid + state.skipped.length;
+        const skipped = failed + state.duplicateCount;
+        const affectedRecords = new Set(state.formatIssues.map((issue) => issue.recordIndex));
+        const errorRecords = new Set(state.formatIssues.filter((issue) => issue.level === "error").map((issue) => issue.recordIndex));
+        const validSourceCount = state.sources.filter((source) => !source.error).length;
+        const merged = state.converted.length ? JSON.stringify(buildOutputDocument(), null, state.formatJson ? 2 : 0) : "";
+
+        renderFiles();
+        renderPreview();
+        renderFormatNotice();
+        els.fileCount.textContent = validSourceCount;
+        els.recordCount.textContent = state.converted.length;
+        els.warningCount.textContent = affectedRecords.size;
+        els.invalidCount.textContent = skipped;
+        els.output.value = merged;
+        els.downloadMergedButton.disabled = !state.converted.length;
+        els.downloadZipButton.disabled = !state.converted.length;
+        els.copyButton.disabled = !state.converted.length;
+        els.formatState.textContent = `输出格式：${FORMAT_LABELS[state.format]} · ${state.formatJson ? "格式化 JSON" : "紧凑 JSON"}`;
+        els.formatDescription.textContent = FORMAT_DESCRIPTIONS[state.format];
+        els.outputDescription.textContent = `${FORMAT_LABELS[state.format]} 合并下载会按当前格式生成结果；ZIP 下载会为每条记录生成一个独立 JSON 文件。`;
+        els.formatButtons.forEach((button) => button.setAttribute("aria-pressed", String(button.dataset.format === state.format)));
+
+        if (!state.sources.length) {
+          setStatus(els.inputStatus, "等待输入。");
+          setStatus(els.outputStatus, "暂无输出。");
+        } else if (state.converted.length) {
+          const details = [`已生成 ${state.converted.length} 个账号`];
+          if (state.duplicateCount) details.push(`自动去重 ${state.duplicateCount} 条`);
+          if (failed) details.push(`跳过 ${failed} 项`);
+          setStatus(els.inputStatus, `${details.join("，")}。`, failed ? "error" : "success");
+          if (failed) setStatus(els.outputStatus, "部分输入未进入输出，请检查文件内容。", "error");
+          else if (errorRecords.size) setStatus(els.outputStatus, `${FORMAT_LABELS[state.format]} 结果已生成，但 ${errorRecords.size} 个账号缺少关键字段。`, "error");
+          else if (affectedRecords.size) setStatus(els.outputStatus, `${FORMAT_LABELS[state.format]} 结果已生成，${affectedRecords.size} 个账号需要注意字段完整性。`, "warning");
+          else setStatus(els.outputStatus, `${FORMAT_LABELS[state.format]} 合并结果已更新。`, "success");
+        } else {
+          setStatus(els.inputStatus, "没有找到可转换账号，请检查 JSON 是否包含 accessToken 和账号信息。", "error");
+          setStatus(els.outputStatus, "暂无有效输出。", "error");
+        }
+      }
+
+      function escapeHtml(value) {
+        return String(value).replace(/[&<>'"]/g, (char) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", "'": "&#39;", '"': "&quot;" })[char]);
+      }
+
+      function downloadBlob(blob, filename) {
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement("a");
+        link.href = url;
+        link.download = filename;
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+        setTimeout(() => URL.revokeObjectURL(url), 1000);
+      }
+
+      function downloadMerged() {
+        const text = JSON.stringify(buildOutputDocument(), null, state.formatJson ? 2 : 0);
+        downloadBlob(new Blob([text], { type: "application/json;charset=utf-8" }), `merged-${state.format}.json`);
+        setStatus(els.outputStatus, "合并 JSON 已开始下载。", "success");
+      }
+
+      function crc32(bytes) {
+        let crc = 0xffffffff;
+        for (const byte of bytes) {
+          crc ^= byte;
+          for (let bit = 0; bit < 8; bit += 1) crc = (crc >>> 1) ^ (0xedb88320 & -(crc & 1));
+        }
+        return (crc ^ 0xffffffff) >>> 0;
+      }
+
+      function put32(view, offset, value) { view.setUint32(offset, value >>> 0, true); }
+      function put16(view, offset, value) { view.setUint16(offset, value, true); }
+
+      function buildZip(files) {
+        const encoder = new TextEncoder();
+        const parts = [];
+        const central = [];
+        let offset = 0;
+        const stamp = new Date();
+        const dosTime = (stamp.getHours() << 11) | (stamp.getMinutes() << 5) | Math.floor(stamp.getSeconds() / 2);
+        const dosDate = ((stamp.getFullYear() - 1980) << 9) | ((stamp.getMonth() + 1) << 5) | stamp.getDate();
+
+        files.forEach((file) => {
+          const name = encoder.encode(file.name);
+          const data = encoder.encode(file.content);
+          const crc = crc32(data);
+          const local = new ArrayBuffer(30 + name.length);
+          const localView = new DataView(local);
+          put32(localView, 0, 0x04034b50); put16(localView, 4, 20); put16(localView, 6, 0); put16(localView, 8, 0);
+          put16(localView, 10, dosTime); put16(localView, 12, dosDate); put32(localView, 14, crc);
+          put32(localView, 18, data.length); put32(localView, 22, data.length); put16(localView, 26, name.length); put16(localView, 28, 0);
+          new Uint8Array(local, 30).set(name);
+          parts.push(new Uint8Array(local), data);
+
+          const entry = new ArrayBuffer(46 + name.length);
+          const entryView = new DataView(entry);
+          put32(entryView, 0, 0x02014b50); put16(entryView, 4, 20); put16(entryView, 6, 20); put16(entryView, 8, 0); put16(entryView, 10, 0);
+          put16(entryView, 12, dosTime); put16(entryView, 14, dosDate); put32(entryView, 16, crc);
+          put32(entryView, 20, data.length); put32(entryView, 24, data.length); put16(entryView, 28, name.length); put16(entryView, 30, 0);
+          put16(entryView, 32, 0); put16(entryView, 34, 0); put16(entryView, 36, 0); put32(entryView, 38, 0); put32(entryView, 42, offset);
+          new Uint8Array(entry, 46).set(name);
+          central.push(new Uint8Array(entry));
+          offset += local.byteLength + data.length;
+        });
+
+        const centralSize = central.reduce((sum, part) => sum + part.length, 0);
+        const end = new ArrayBuffer(22);
+        const endView = new DataView(end);
+        put32(endView, 0, 0x06054b50); put16(endView, 4, 0); put16(endView, 6, 0); put16(endView, 8, files.length); put16(endView, 10, files.length);
+        put32(endView, 12, centralSize); put32(endView, 16, offset); put16(endView, 20, 0);
+        return new Blob([...parts, ...central, new Uint8Array(end)], { type: "application/zip" });
+      }
+
+      function makeZipFiles() {
+        const usedNames = new Set();
+        return state.converted.map((converted, index) => {
+          const base = converted.name.replace(/[^a-zA-Z0-9._-]+/g, "-") || "record";
+          const suffix = state.converted.length === 1 ? "" : `-${String(index + 1).padStart(3, "0")}`;
+          let name = `${base}${suffix}.json`;
+          let attempt = 2;
+          while (usedNames.has(name)) name = `${base}${suffix}-${attempt++}.json`;
+          usedNames.add(name);
+          return { name, content: JSON.stringify(getZipRecord(converted), null, state.formatJson ? 2 : 0) };
+        });
+      }
+
+      function downloadZip() {
+        downloadBlob(buildZip(makeZipFiles()), `${state.format}-json-records.zip`);
+        setStatus(els.outputStatus, `ZIP 已开始下载，包含 ${state.converted.length} 个独立 JSON 文件。`, "success");
+      }
+
+      async function copyOutput() {
+        try {
+          await navigator.clipboard.writeText(els.output.value);
+          setStatus(els.outputStatus, "合并 JSON 已复制到剪贴板。", "success");
+        } catch {
+          els.output.focus();
+          els.output.select();
+          setStatus(els.outputStatus, "浏览器未授权自动复制，已选中输出内容。", "error");
+        }
+      }
+
+      async function handleFiles(fileList) {
+        const files = Array.from(fileList || []).filter((file) => file.name.toLowerCase().endsWith(".json") || file.type === "application/json" || file.type === "text/plain");
+        if (!files.length) {
+          setStatus(els.inputStatus, "请选择 JSON 文件。", "error");
+          return;
+        }
+        setStatus(els.inputStatus, `正在读取 ${files.length} 个文件...`);
+        const sources = await Promise.all(files.map(createFileSource));
+        addSources(sources);
+      }
+
+      els.browseButton.addEventListener("click", () => els.fileInput.click());
+      els.fileInput.addEventListener("change", (event) => {
+        const files = Array.from(event.target.files || []);
+        event.target.value = "";
+        handleFiles(files);
+      });
+      els.sampleButton.addEventListener("click", loadSample);
+      els.clearButton.addEventListener("click", clearAll);
+      els.pasteInput.addEventListener("input", refreshPasteSource);
+      els.formatButtons.forEach((button) => button.addEventListener("click", () => {
+        state.format = button.dataset.format;
+        render();
+      }));
+      els.downloadMergedButton.addEventListener("click", downloadMerged);
+      els.downloadZipButton.addEventListener("click", downloadZip);
+      els.copyButton.addEventListener("click", copyOutput);
+      els.fileList.addEventListener("click", (event) => {
+        const button = event.target.closest("[data-remove-index]");
+        if (button) removeSource(Number(button.dataset.removeIndex));
+      });
+
+      ["dragenter", "dragover"].forEach((eventName) => els.dropzone.addEventListener(eventName, (event) => {
+        event.preventDefault();
+        els.dropzone.classList.add("dragover");
+      }));
+      ["dragleave", "drop"].forEach((eventName) => els.dropzone.addEventListener(eventName, (event) => {
+        event.preventDefault();
+        els.dropzone.classList.remove("dragover");
+      }));
+      els.dropzone.addEventListener("drop", (event) => handleFiles(event.dataTransfer.files));
+
+      render();
+    })();
+  </script>
+</body>
+</html>
