@@ -925,7 +925,7 @@
         const summary = messages.slice(0, 3).join("；");
         const remaining = messages.length > 3 ? `；另有 ${messages.length - 3} 项` : "";
         const cpaCompatibilityNote = state.format === "cpa" && state.converted.length > 1
-          ? "CPA 合并 JSON 是数组；CPAMP/CLIProxyAPI 批量导入请下载独立 JSON ZIP"
+          ? "CPA 合并 JSON 是数组；请下载 CPA 批量 ZIP，解压后将其中的 JSON 文件上传到 CPAMP/CLIProxyAPI"
           : "";
 
         if (errorRecords.size) {
@@ -1059,8 +1059,12 @@
         els.copyButton.disabled = !state.converted.length;
         els.formatState.textContent = `输出格式：${FORMAT_LABELS[state.format]} · ${state.formatJson ? "格式化 JSON" : "紧凑 JSON"}`;
         els.formatDescription.textContent = FORMAT_DESCRIPTIONS[state.format];
-        els.outputDescription.textContent = state.format === "cpa" && state.converted.length > 1
-          ? "CPA 合并 JSON 会输出数组；CPAMP/CLIProxyAPI 批量导入请下载独立 JSON ZIP。"
+        const isCpaBatch = state.format === "cpa" && state.converted.length > 1;
+        els.downloadMergedButton.textContent = isCpaBatch ? "下载 CPA 合并数组" : "下载合并 JSON";
+        els.downloadZipButton.textContent = isCpaBatch ? "下载 CPA 批量 ZIP" : "下载独立 JSON ZIP";
+        els.downloadZipButton.title = isCpaBatch ? "解压后将其中的 JSON 文件批量上传到 CPAMP/CLIProxyAPI" : "每条记录生成一个独立 JSON 文件";
+        els.outputDescription.textContent = isCpaBatch
+          ? "CPA 合并 JSON 会输出数组；下载 CPA 批量 ZIP，解压后将其中的 JSON 文件上传到 CPAMP/CLIProxyAPI。"
           : `${FORMAT_LABELS[state.format]} 合并下载会按当前格式生成结果；ZIP 下载会为每条记录生成一个独立 JSON 文件。`;
         els.formatButtons.forEach((button) => button.setAttribute("aria-pressed", String(button.dataset.format === state.format)));
 
@@ -1099,7 +1103,7 @@
       function downloadMerged() {
         const text = JSON.stringify(buildOutputDocument(), null, state.formatJson ? 2 : 0);
         downloadBlob(new Blob([text], { type: "application/json;charset=utf-8" }), `merged-${state.format}.json`);
-        setStatus(els.outputStatus, "合并 JSON 已开始下载。", "success");
+        setStatus(els.outputStatus, state.format === "cpa" && state.converted.length > 1 ? "CPA 合并数组已开始下载。" : "合并 JSON 已开始下载。", "success");
       }
 
       function crc32(bytes) {
@@ -1169,7 +1173,10 @@
 
       function downloadZip() {
         downloadBlob(buildZip(makeZipFiles()), `${state.format}-json-records.zip`);
-        setStatus(els.outputStatus, `ZIP 已开始下载，包含 ${state.converted.length} 个独立 JSON 文件。`, "success");
+        const message = state.format === "cpa" && state.converted.length > 1
+          ? `CPA 批量 ZIP 已开始下载，解压后可上传其中的 ${state.converted.length} 个独立 JSON 文件。`
+          : `ZIP 已开始下载，包含 ${state.converted.length} 个独立 JSON 文件。`;
+        setStatus(els.outputStatus, message, "success");
       }
 
       async function copyOutput() {

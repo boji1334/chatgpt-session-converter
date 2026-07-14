@@ -217,8 +217,11 @@ function testBatchConversionPreservesAllSub2apiAccounts() {
   assert.equal(page.elements.get("#invalidCount").textContent, 0);
   assert.match(page.elements.get("#inputStatus").textContent, /已生成 100 个账号/);
   assert.match(page.elements.get("#formatNotice").textContent, /CPA 合并 JSON 是数组/);
-  assert.match(page.elements.get("#formatNotice").textContent, /独立 JSON ZIP/);
-  assert.match(page.elements.get("#outputDescription").textContent, /批量导入请下载独立 JSON ZIP/);
+  assert.match(page.elements.get("#formatNotice").textContent, /CPA 批量 ZIP/);
+  assert.equal(page.elements.get("#downloadMergedButton").textContent, "下载 CPA 合并数组");
+  assert.equal(page.elements.get("#downloadZipButton").textContent, "下载 CPA 批量 ZIP");
+  assert.match(page.elements.get("#downloadZipButton").title, /解压后/);
+  assert.match(page.elements.get("#outputDescription").textContent, /解压后将其中的 JSON 文件上传/);
 }
 
 function testFormatValidationReportsMissingFields() {
