@@ -216,6 +216,9 @@ function testBatchConversionPreservesAllSub2apiAccounts() {
   assert.equal(page.elements.get("#recordCount").textContent, 100);
   assert.equal(page.elements.get("#invalidCount").textContent, 0);
   assert.match(page.elements.get("#inputStatus").textContent, /已生成 100 个账号/);
+  assert.match(page.elements.get("#formatNotice").textContent, /CPA 合并 JSON 是数组/);
+  assert.match(page.elements.get("#formatNotice").textContent, /独立 JSON ZIP/);
+  assert.match(page.elements.get("#outputDescription").textContent, /批量导入请下载独立 JSON ZIP/);
 }
 
 function testFormatValidationReportsMissingFields() {

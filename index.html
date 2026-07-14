@@ -924,12 +924,18 @@
         const messages = [...new Set(orderedIssues.map((issue) => issue.message))];
         const summary = messages.slice(0, 3).join("；");
         const remaining = messages.length > 3 ? `；另有 ${messages.length - 3} 项` : "";
+        const cpaCompatibilityNote = state.format === "cpa" && state.converted.length > 1
+          ? "CPA 合并 JSON 是数组；CPAMP/CLIProxyAPI 批量导入请下载独立 JSON ZIP"
+          : "";
 
         if (errorRecords.size) {
-          els.formatNotice.textContent = `${errorRecords.size} 个账号缺少 ${FORMAT_LABELS[state.format]} 关键字段：${summary}${remaining}。仍可下载，但目标工具可能拒绝导入。`;
+          els.formatNotice.textContent = `${errorRecords.size} 个账号缺少 ${FORMAT_LABELS[state.format]} 关键字段：${summary}${remaining}。${cpaCompatibilityNote ? `${cpaCompatibilityNote}。` : "仍可下载，但目标工具可能拒绝导入。"}`;
           els.formatNotice.className = "format-notice error";
         } else if (affectedRecords.size) {
-          els.formatNotice.textContent = `${affectedRecords.size} 个账号可导出，但需要注意：${summary}${remaining}。`;
+          els.formatNotice.textContent = `${affectedRecords.size} 个账号可导出，但需要注意：${summary}${remaining}。${cpaCompatibilityNote ? `${cpaCompatibilityNote}。` : ""}`;
+          els.formatNotice.className = "format-notice warning";
+        } else if (cpaCompatibilityNote) {
+          els.formatNotice.textContent = `${state.converted.length} 个账号可导出。${cpaCompatibilityNote}。`;
           els.formatNotice.className = "format-notice warning";
         } else {
           els.formatNotice.textContent = `${state.converted.length} 个账号已通过 ${FORMAT_LABELS[state.format]} 字段检查。`;
@@ -1053,7 +1059,9 @@
         els.copyButton.disabled = !state.converted.length;
         els.formatState.textContent = `输出格式：${FORMAT_LABELS[state.format]} · ${state.formatJson ? "格式化 JSON" : "紧凑 JSON"}`;
         els.formatDescription.textContent = FORMAT_DESCRIPTIONS[state.format];
-        els.outputDescription.textContent = `${FORMAT_LABELS[state.format]} 合并下载会按当前格式生成结果；ZIP 下载会为每条记录生成一个独立 JSON 文件。`;
+        els.outputDescription.textContent = state.format === "cpa" && state.converted.length > 1
+          ? "CPA 合并 JSON 会输出数组；CPAMP/CLIProxyAPI 批量导入请下载独立 JSON ZIP。"
+          : `${FORMAT_LABELS[state.format]} 合并下载会按当前格式生成结果；ZIP 下载会为每条记录生成一个独立 JSON 文件。`;
         els.formatButtons.forEach((button) => button.setAttribute("aria-pressed", String(button.dataset.format === state.format)));
 
         if (!state.sources.length) {

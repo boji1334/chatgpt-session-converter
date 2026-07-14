@@ -11,6 +11,7 @@
 - 输出 CPA、sub2api、Cockpit、9router、Codex、AxonHub、Codex-Manager
 - 下载一个合并 JSON
 - 下载每个账号一个 JSON 文件的 ZIP
+- CPA 多账号的合并 JSON 是数组；CPAMP/CLIProxyAPI 批量导入请使用独立 JSON ZIP
 - 严格保持有效输入记录的顺序和数量，不自动去重
 - 检查目标格式所需的 `account_id`、`id_token`、`refresh_token` 和过期时间
 - 保留输入中的 `last_refresh`、过期时间、真实 `id_token` 和 `refresh_token`
