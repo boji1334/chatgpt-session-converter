@@ -537,7 +537,6 @@
         sources: [],
         converted: [],
         skipped: [],
-        duplicateCount: 0,
         formatIssues: [],
         format: "sub2api",
         formatJson: true,
@@ -869,15 +868,7 @@
         const codexManagerMeta = Object.fromEntries(Object.entries({ label: firstNonEmpty(name, email, sourceName, "ChatGPT Account"), workspace_id: workspaceId, chatgpt_account_id: chatgptAccountId, note: "Imported from ChatGPT session" }).filter(([, value]) => value !== undefined && value !== null && value !== ""));
         const codexManager = { tokens: { access_token: accessToken, refresh_token: refreshToken || "", id_token: inputIdToken || "", ...codexManagerTokenHints }, meta: codexManagerMeta };
         const canonicalAccountId = firstNonEmpty(accountId, chatgptAccountId);
-        const dedupeKey = canonicalAccountId
-          ? `account:${canonicalAccountId.toLowerCase()}`
-          : workspaceId && email
-            ? `workspace:${workspaceId.toLowerCase()}:${email.toLowerCase()}`
-            : email
-              ? `email:${email.toLowerCase()}`
-              : `token:${accessToken}`;
-        const completenessScore = (hasRefreshToken ? 8 : 0) + (inputIdToken ? 4 : 0) + (canonicalAccountId ? 2 : 0) + (email ? 1 : 0) + (expiresAt ? 1 : 0);
-        return { sourceName, sourcePath: options.sourcePath, email, name, accountId: canonicalAccountId, workspaceId, expiresAt, accessTokenExpiresAt, lastRefresh, hasRefreshToken, hasInputIdToken: Boolean(inputIdToken), hasIdToken: Boolean(idToken), hasSyntheticIdToken: Boolean(syntheticIdToken), dedupeKey, completenessScore, cpa, cockpit, nineRouter, codexAuthJson, axonHub, codexManager, sub2apiAccount };
+        return { sourceName, sourcePath: options.sourcePath, email, name, accountId: canonicalAccountId, workspaceId, expiresAt, accessTokenExpiresAt, lastRefresh, hasRefreshToken, hasInputIdToken: Boolean(inputIdToken), hasIdToken: Boolean(idToken), hasSyntheticIdToken: Boolean(syntheticIdToken), cpa, cockpit, nineRouter, codexAuthJson, axonHub, codexManager, sub2apiAccount };
       }
 
       function buildSub2apiDocument(converted, now = new Date()) {
@@ -894,26 +885,6 @@
         if (state.format === "sub2api") return converted.sub2apiAccount;
         const key = { cpa: "cpa", cockpit: "cockpit", "9router": "nineRouter", codex: "codexAuthJson", axonhub: "axonHub", codexmanager: "codexManager" }[state.format];
         return converted[key];
-      }
-
-      function deduplicateConverted(records) {
-        const byKey = new Map();
-        const order = [];
-        let duplicateCount = 0;
-
-        records.forEach((record) => {
-          const existing = byKey.get(record.dedupeKey);
-          if (!existing) {
-            byKey.set(record.dedupeKey, record);
-            order.push(record.dedupeKey);
-            return;
-          }
-
-          duplicateCount += 1;
-          if (record.completenessScore > existing.completenessScore) byKey.set(record.dedupeKey, record);
-        });
-
-        return { records: order.map((key) => byKey.get(key)), duplicateCount };
       }
 
       function getFormatIssues(record, format) {
@@ -1060,13 +1031,10 @@
             }
           });
         });
-        const deduplicated = deduplicateConverted(candidates);
-        state.converted = deduplicated.records;
-        state.duplicateCount = deduplicated.duplicateCount;
+        state.converted = candidates;
         state.formatIssues = state.converted.flatMap((record, recordIndex) => getFormatIssues(record, state.format).map((issue) => ({ ...issue, recordIndex })));
         const invalid = state.sources.filter((source) => source.error).length;
         const failed = invalid + state.skipped.length;
-        const skipped = failed + state.duplicateCount;
         const affectedRecords = new Set(state.formatIssues.map((issue) => issue.recordIndex));
         const errorRecords = new Set(state.formatIssues.filter((issue) => issue.level === "error").map((issue) => issue.recordIndex));
         const validSourceCount = state.sources.filter((source) => !source.error).length;
@@ -1078,7 +1046,7 @@
         els.fileCount.textContent = validSourceCount;
         els.recordCount.textContent = state.converted.length;
         els.warningCount.textContent = affectedRecords.size;
-        els.invalidCount.textContent = skipped;
+        els.invalidCount.textContent = failed;
         els.output.value = merged;
         els.downloadMergedButton.disabled = !state.converted.length;
         els.downloadZipButton.disabled = !state.converted.length;
@@ -1093,7 +1061,6 @@
           setStatus(els.outputStatus, "暂无输出。");
         } else if (state.converted.length) {
           const details = [`已生成 ${state.converted.length} 个账号`];
-          if (state.duplicateCount) details.push(`自动去重 ${state.duplicateCount} 条`);
           if (failed) details.push(`跳过 ${failed} 项`);
           setStatus(els.inputStatus, `${details.join("，")}。`, failed ? "error" : "success");
           if (failed) setStatus(els.outputStatus, "部分输入未进入输出，请检查文件内容。", "error");

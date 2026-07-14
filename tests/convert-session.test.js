@@ -184,32 +184,38 @@ function testLastRefreshIsPreserved() {
   assert.equal(readOutput(page).last_refresh, "2026-05-20T03:04:05.000Z");
 }
 
-function testDuplicateAccountsPreferMoreCompleteRecord() {
+function testBatchConversionPreservesAllSub2apiAccounts() {
   const page = loadPageScript();
-  const idToken = jwtWithPayload(authClaims("account-duplicate", "duplicate@example.com"));
-  setInput(page, [
-    {
-      email: "duplicate@example.com",
-      account_id: "account-duplicate",
-      access_token: "old-access-token",
-      expired: "2030-01-01T00:00:00.000Z",
-    },
-    {
-      email: "duplicate@example.com",
-      account_id: "account-duplicate",
-      access_token: "new-access-token",
-      refresh_token: "real-refresh-token",
-      id_token: idToken,
-      expired: "2030-01-01T00:00:00.000Z",
-    },
-  ]);
+  const sharedAccountId = "shared-workspace-account";
+  const accounts = Array.from({ length: 100 }, (_, index) => {
+    const email = `batch-${String(index + 1).padStart(3, "0")}@example.com`;
+    return {
+      name: email,
+      platform: "openai",
+      type: "oauth",
+      credentials: {
+        access_token: `access-token-${index + 1}`,
+        refresh_token: `refresh-token-${index + 1}`,
+        id_token: jwtWithPayload(authClaims(sharedAccountId, email)),
+        chatgpt_account_id: sharedAccountId,
+        email,
+        expires_at: "2030-01-01T00:00:00.000Z",
+      },
+    };
+  });
 
+  setInput(page, { exported_at: "2026-07-14T00:00:00.000Z", proxies: [], accounts });
+  selectFormat(page, "cpa");
   const output = readOutput(page);
-  assert.equal(output.accounts.length, 1);
-  assert.equal(output.accounts[0].credentials.access_token, "new-access-token");
-  assert.equal(output.accounts[0].credentials.refresh_token, "real-refresh-token");
-  assert.equal(page.elements.get("#invalidCount").textContent, 1);
-  assert.match(page.elements.get("#inputStatus").textContent, /自动去重 1 条/);
+  assert.ok(Array.isArray(output));
+  assert.equal(output.length, 100);
+  assert.equal(output[0].email, "batch-001@example.com");
+  assert.equal(output[0].access_token, "access-token-1");
+  assert.equal(output[99].email, "batch-100@example.com");
+  assert.equal(output[99].access_token, "access-token-100");
+  assert.equal(page.elements.get("#recordCount").textContent, 100);
+  assert.equal(page.elements.get("#invalidCount").textContent, 0);
+  assert.match(page.elements.get("#inputStatus").textContent, /已生成 100 个账号/);
 }
 
 function testFormatValidationReportsMissingFields() {
@@ -271,7 +277,7 @@ async function main() {
   testTokenOnlyAxonHubInputIsDetected();
   testRefreshableInputPreservesExpiryAcrossFormats();
   testLastRefreshIsPreserved();
-  testDuplicateAccountsPreferMoreCompleteRecord();
+  testBatchConversionPreservesAllSub2apiAccounts();
   testFormatValidationReportsMissingFields();
   testAllFormatsProduceJson();
   await testFileInputCanSelectTheSameFileAgain();
