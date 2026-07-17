@@ -344,6 +344,91 @@
 
     .output-actions { margin-top: 16px; }
 
+    .preview-heading {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      margin-top: 18px;
+    }
+
+    .preview-heading .section-label { flex: 1; margin: 0; }
+    .quota-inline-button { min-height: 34px; padding: 7px 11px; }
+
+    .quota-check {
+      margin-top: 16px;
+      padding: 14px;
+      border: 1px solid var(--line);
+      border-radius: 9px;
+      background: #fbfdfd;
+    }
+
+    .quota-check.ready { border-color: #b9d9d5; background: #f2faf8; }
+    .quota-check.warning { border-color: #e7bba7; background: var(--orange-soft); }
+
+    .quota-check-summary {
+      margin: 0;
+      color: #31545a;
+      font-size: 12px;
+      line-height: 1.6;
+    }
+
+    .quota-check-meta {
+      margin: 6px 0 0;
+      color: var(--muted);
+      font-size: 11px;
+      line-height: 1.5;
+    }
+
+    .quota-window-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 8px;
+      margin-top: 12px;
+    }
+
+    .quota-window {
+      min-width: 0;
+      padding: 10px 11px;
+      border: 1px solid #dce8e6;
+      border-radius: 8px;
+      background: white;
+    }
+
+    .quota-window-label {
+      color: #527076;
+      font-size: 11px;
+      font-weight: 800;
+    }
+
+    .quota-window-value {
+      margin-top: 4px;
+      color: var(--ink);
+      font-size: 18px;
+      font-weight: 850;
+    }
+
+    .quota-window-meta {
+      margin-top: 3px;
+      color: var(--muted);
+      font-size: 11px;
+    }
+
+    .quota-account-list {
+      display: grid;
+      gap: 7px;
+      margin-top: 12px;
+    }
+
+    .quota-account {
+      padding-top: 9px;
+      border-top: 1px solid #dce8e6;
+    }
+
+    .quota-account:first-child { padding-top: 0; border-top: 0; }
+    .quota-account-name { color: #31545a; font-size: 12px; font-weight: 800; }
+    .quota-account-detail { margin-top: 3px; color: var(--muted); font-size: 11px; line-height: 1.5; }
+
     .format-switch {
       display: flex;
       flex-wrap: wrap;
@@ -502,12 +587,20 @@
             <div class="stat"><span class="stat-value" id="invalidCount">0</span><span class="stat-label">跳过项</span></div>
           </div>
 
-          <div class="section-label">记录预览 <span id="previewHint">暂无可预览记录</span></div>
+          <div class="preview-heading">
+            <div class="section-label">记录预览 <span id="previewHint">暂无可预览记录</span></div>
+            <button class="button primary quota-inline-button" id="checkQuotaButton" type="button" disabled>检测额度</button>
+          </div>
           <div class="preview">
             <table>
               <thead><tr><th>#</th><th>来源</th><th>格式</th><th>摘要</th></tr></thead>
               <tbody id="previewBody"><tr><td class="empty-row" colspan="4">等待有效 JSON。</td></tr></tbody>
             </table>
+          </div>
+
+          <div class="section-label">额度检测 <span>读取已导入的检测快照</span></div>
+          <div class="quota-check" id="quotaCheckOutput" aria-live="polite">
+            <p class="quota-check-summary">载入账号后点击“检测额度”。检测只读取当前导入的数据，不会上传 token。</p>
           </div>
 
           <div class="section-label">合并后的 JSON</div>
@@ -535,9 +628,11 @@
 
       const state = {
         sources: [],
+        sourceRevision: 0,
         converted: [],
         skipped: [],
         formatIssues: [],
+        quotaCheck: null,
         format: "sub2api",
         formatJson: true,
       };
@@ -562,6 +657,8 @@
         downloadMergedButton: $("#downloadMergedButton"),
         downloadZipButton: $("#downloadZipButton"),
         copyButton: $("#copyButton"),
+        checkQuotaButton: $("#checkQuotaButton"),
+        quotaCheckOutput: $("#quotaCheckOutput"),
         outputStatus: $("#outputStatus"),
         outputDescription: $("#outputDescription"),
         formatNotice: $("#formatNotice"),
@@ -868,7 +965,156 @@
         const codexManagerMeta = Object.fromEntries(Object.entries({ label: firstNonEmpty(name, email, sourceName, "ChatGPT Account"), workspace_id: workspaceId, chatgpt_account_id: chatgptAccountId, note: "Imported from ChatGPT session" }).filter(([, value]) => value !== undefined && value !== null && value !== ""));
         const codexManager = { tokens: { access_token: accessToken, refresh_token: refreshToken || "", id_token: inputIdToken || "", ...codexManagerTokenHints }, meta: codexManagerMeta };
         const canonicalAccountId = firstNonEmpty(accountId, chatgptAccountId);
-        return { sourceName, sourcePath: options.sourcePath, email, name, accountId: canonicalAccountId, workspaceId, expiresAt, accessTokenExpiresAt, lastRefresh, hasRefreshToken, hasInputIdToken: Boolean(inputIdToken), hasIdToken: Boolean(idToken), hasSyntheticIdToken: Boolean(syntheticIdToken), cpa, cockpit, nineRouter, codexAuthJson, axonHub, codexManager, sub2apiAccount };
+        return { sourceName, sourcePath: options.sourcePath, sourceRecord: record, email, name, accountId: canonicalAccountId, workspaceId, expiresAt, accessTokenExpiresAt, lastRefresh, hasRefreshToken, hasInputIdToken: Boolean(inputIdToken), hasIdToken: Boolean(idToken), hasSyntheticIdToken: Boolean(syntheticIdToken), cpa, cockpit, nineRouter, codexAuthJson, axonHub, codexManager, sub2apiAccount };
+      }
+
+      function quotaSignature() {
+        return String(state.sourceRevision);
+      }
+
+      function numberOrUndefined(...values) {
+        for (const value of values) {
+          if (typeof value === "number" && Number.isFinite(value)) return value;
+          if (typeof value === "string" && value.trim() !== "" && Number.isFinite(Number(value))) return Number(value);
+        }
+        return undefined;
+      }
+
+      function formatPercent(value) {
+        if (typeof value !== "number" || !Number.isFinite(value)) return "未知";
+        const rounded = Math.round(Math.max(0, Math.min(100, value)) * 10) / 10;
+        return `${String(rounded).replace(/\.0$/, "")}%`;
+      }
+
+      function formatDuration(seconds) {
+        if (typeof seconds !== "number" || !Number.isFinite(seconds)) return "恢复时间未返回";
+        if (seconds <= 0) return "已恢复";
+        const minutes = Math.ceil(seconds / 60);
+        if (minutes < 60) return `${minutes} 分钟后恢复`;
+        const hours = Math.ceil(minutes / 60);
+        if (hours < 24) return `${hours}h 后恢复`;
+        return `${Math.ceil(hours / 24)}d 后恢复`;
+      }
+
+      function extractQuotaData(record) {
+        const data = { connectivity: undefined, auth: undefined, quota: undefined, usage: undefined, windows: {} };
+        const visited = new WeakSet();
+
+        function visit(value) {
+          if (!isPlainObject(value) && !Array.isArray(value)) return;
+          if (isPlainObject(value)) {
+            if (visited.has(value)) return;
+            visited.add(value);
+            if (isPlainObject(value.connectivity) && !data.connectivity) data.connectivity = value.connectivity;
+            if (isPlainObject(value.auth) && !data.auth) data.auth = value.auth;
+            if (isPlainObject(value.quota) && !data.quota) data.quota = value.quota;
+            if (isPlainObject(value.usage) && !data.usage) data.usage = value.usage;
+            if (isPlainObject(value.windows)) Object.assign(data.windows, value.windows);
+            Object.values(value).forEach(visit);
+            return;
+          }
+          value.forEach(visit);
+        }
+
+        visit(record);
+        return data;
+      }
+
+      function analyzeQuotaRecord(converted) {
+        const data = extractQuotaData(converted.sourceRecord);
+        const quota = data.quota || {};
+        const usage = data.usage || {};
+        const windows = ["5h", "7d"].map((key) => {
+          const window = isPlainObject(data.windows[key]) ? data.windows[key] : undefined;
+          if (!window) return { key, label: key, usedPercent: undefined, used: undefined, reset: "未返回" };
+          let usedPercent = numberOrUndefined(window.used_percent, window.usedPercent, window.used_percentage, window.percent);
+          const remainingPercent = numberOrUndefined(window.remaining_percent, window.remainingPercent);
+          if (usedPercent === undefined && remainingPercent !== undefined) usedPercent = 100 - remainingPercent;
+          const used = typeof window.used === "boolean" ? window.used : usedPercent === undefined ? undefined : usedPercent > 0;
+          const resetSeconds = numberOrUndefined(window.reset_after_seconds, window.resetAfterSeconds);
+          const reset = window.recovered === true || window.reset_expired === true
+            ? "已恢复"
+            : resetSeconds !== undefined
+              ? formatDuration(resetSeconds)
+              : typeof window.reset_at === "string" || typeof window.resetAt === "string"
+                ? "按返回时间恢复"
+                : "恢复时间未返回";
+          return { key, label: typeof window.label === "string" ? window.label : key, usedPercent, used, reset };
+        });
+
+        const hasWindows = windows.some((window) => window.usedPercent !== undefined || window.used !== undefined || window.reset !== "未返回");
+        const used = typeof usage.used === "boolean"
+          ? usage.used
+          : windows.some((window) => window.used === true)
+            ? true
+            : windows.some((window) => window.used === false)
+              ? false
+              : undefined;
+        const passed = data.connectivity?.ok === true && data.auth?.ok === true && quota.ok === true;
+        return {
+          name: converted.email || converted.name || converted.sourceName || "未命名账号",
+          passed,
+          used,
+          windows,
+          hasWindows,
+          hasUsageSnapshot: Boolean(data.usage || data.quota || hasWindows),
+          detail: hasWindows ? "已读取 5h / 7d 额度窗口" : "导入数据中没有额度快照",
+        };
+      }
+
+      function quotaSummary(result) {
+        if (result.passed) return "连通、授权和额度检查通过";
+        if (result.hasUsageSnapshot) return "已读取导入数据中的额度快照";
+        return "未找到可读取的额度快照";
+      }
+
+      function quotaUsageLabel(used) {
+        if (used === true) return "额度已有使用记录";
+        if (used === false) return "额度暂无使用记录";
+        return "使用状态未返回";
+      }
+
+      function renderQuotaCheck() {
+        const hasRecords = state.converted.length > 0;
+        els.checkQuotaButton.disabled = !hasRecords;
+        if (!hasRecords) {
+          els.quotaCheckOutput.className = "quota-check";
+          els.quotaCheckOutput.innerHTML = '<p class="quota-check-summary">载入账号后点击“检测额度”。检测只读取当前导入的数据，不会上传 token。</p>';
+          return;
+        }
+
+        if (!state.quotaCheck || state.quotaCheck.signature !== quotaSignature()) {
+          els.quotaCheckOutput.className = "quota-check";
+          els.quotaCheckOutput.innerHTML = '<p class="quota-check-summary">已载入账号，可以检测额度使用情况。</p><p class="quota-check-meta">当前为本地快照读取；没有检测快照的账号会显示“未返回”。</p>';
+          return;
+        }
+
+        const results = state.quotaCheck.results;
+        const passedCount = results.filter((result) => result.passed).length;
+        const usedCount = results.filter((result) => result.used === true).length;
+        const unknownCount = results.filter((result) => result.used === undefined).length;
+        const primary = results[0];
+        const windowText = primary.windows.map((window) => `${window.label} 已用 ${formatPercent(window.usedPercent)}，${window.reset}`).join("；");
+        const summary = results.length === 1
+          ? `检测完成：${quotaSummary(primary)}；${quotaUsageLabel(primary.used)}；${windowText}`
+          : `检测完成：${passedCount}/${results.length} 个账号通过字段检查；${usedCount} 个账号已有使用记录${unknownCount ? `，${unknownCount} 个账号状态未返回` : ""}。`;
+        const rows = results.length > 1
+          ? `<div class="quota-account-list">${results.map((result) => `<div class="quota-account"><div class="quota-account-name">${escapeHtml(result.name)} · ${escapeHtml(quotaUsageLabel(result.used))}</div><div class="quota-account-detail">${escapeHtml(result.windows.map((window) => `${window.label} ${formatPercent(window.usedPercent)} · ${window.reset}`).join("；"))}</div></div>`).join("")}</div>`
+          : `<div class="quota-window-grid">${primary.windows.map((window) => `<div class="quota-window"><div class="quota-window-label">${escapeHtml(window.label)}</div><div class="quota-window-value">已用 ${escapeHtml(formatPercent(window.usedPercent))}</div><div class="quota-window-meta">${escapeHtml(window.reset)}</div></div>`).join("")}</div>`;
+        els.quotaCheckOutput.className = `quota-check ${passedCount === results.length ? "ready" : "warning"}`;
+        els.quotaCheckOutput.innerHTML = `<p class="quota-check-summary">${escapeHtml(summary)}</p>${rows}<p class="quota-check-meta">检测时间：${escapeHtml(new Date(state.quotaCheck.checkedAt).toLocaleString())} · ${escapeHtml(primary.detail)}</p>`;
+      }
+
+      function runQuotaCheck() {
+        if (!state.converted.length) return;
+        state.quotaCheck = {
+          signature: quotaSignature(),
+          checkedAt: new Date().toISOString(),
+          results: state.converted.map(analyzeQuotaRecord),
+        };
+        renderQuotaCheck();
+        const unknown = state.quotaCheck.results.filter((result) => !result.hasUsageSnapshot).length;
+        setStatus(els.outputStatus, unknown ? `额度检测完成，${unknown} 个账号没有可读取的额度快照。` : "额度检测完成，结果已显示。", unknown ? "warning" : "success");
       }
 
       function buildSub2apiDocument(converted, now = new Date()) {
@@ -960,11 +1206,13 @@
 
       function addSources(newSources) {
         state.sources.push(...newSources);
+        state.sourceRevision += 1;
         render();
       }
 
       function removeSource(index) {
         state.sources.splice(index, 1);
+        state.sourceRevision += 1;
         render();
       }
 
@@ -979,6 +1227,7 @@
             state.sources.push({ name: "粘贴内容", size: new TextEncoder().encode(text).length, records: [], accountCount: 0, error: error.message });
           }
         }
+        state.sourceRevision += 1;
         render();
       }
 
@@ -990,6 +1239,7 @@
 
       function clearAll() {
         state.sources = [];
+        state.sourceRevision += 1;
         els.fileInput.value = "";
         els.pasteInput.value = "";
         render();
@@ -1039,6 +1289,7 @@
         });
         state.converted = candidates;
         state.formatIssues = state.converted.flatMap((record, recordIndex) => getFormatIssues(record, state.format).map((issue) => ({ ...issue, recordIndex })));
+        if (state.quotaCheck && state.quotaCheck.signature !== quotaSignature()) state.quotaCheck = null;
         const invalid = state.sources.filter((source) => source.error).length;
         const failed = invalid + state.skipped.length;
         const affectedRecords = new Set(state.formatIssues.map((issue) => issue.recordIndex));
@@ -1048,6 +1299,7 @@
 
         renderFiles();
         renderPreview();
+        renderQuotaCheck();
         renderFormatNotice();
         els.fileCount.textContent = validSourceCount;
         els.recordCount.textContent = state.converted.length;
@@ -1217,6 +1469,7 @@
       els.downloadMergedButton.addEventListener("click", downloadMerged);
       els.downloadZipButton.addEventListener("click", downloadZip);
       els.copyButton.addEventListener("click", copyOutput);
+      els.checkQuotaButton.addEventListener("click", runQuotaCheck);
       els.fileList.addEventListener("click", (event) => {
         const button = event.target.closest("[data-remove-index]");
         if (button) removeSource(Number(button.dataset.removeIndex));
