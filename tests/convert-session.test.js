@@ -266,10 +266,11 @@ async function testFileInputCanSelectTheSameFileAgain() {
   assert.equal(page.elements.get("#recordCount").textContent, 1);
 }
 
-function testNetworkIsBlockedByCsp() {
+function testQuotaApiIsAllowedByCsp() {
   const page = loadPageScript();
   assert.match(page.html, /Content-Security-Policy/);
-  assert.match(page.html, /connect-src 'none'/);
+  assert.match(page.html, /connect-src 'self' https:/);
+  assert.match(page.html, /name="quota-api-url"/);
   assert.match(page.html, /name="referrer" content="no-referrer"/);
 }
 
@@ -287,7 +288,7 @@ async function main() {
   testFormatValidationReportsMissingFields();
   testAllFormatsProduceJson();
   await testFileInputCanSelectTheSameFileAgain();
-  testNetworkIsBlockedByCsp();
+  testQuotaApiIsAllowedByCsp();
   testDropzoneDoesNotNestButtonSemantics();
   console.log("convert-session tests passed");
 }

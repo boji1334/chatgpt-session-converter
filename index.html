@@ -2,10 +2,11 @@
 <html lang="zh-CN">
 <head>
   <meta charset="utf-8">
-  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data:; connect-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data:; connect-src 'self' https: http://127.0.0.1:8787; object-src 'none'; base-uri 'none'; form-action 'none'">
   <meta name="referrer" content="no-referrer">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="description" content="在浏览器本地批量合并 JSON，或将每条记录打包为独立 JSON 文件 ZIP。">
+  <meta name="quota-api-url" content="">
   <title>JSON Workbench | 批量 JSON 工具</title>
   <style>
     :root {
@@ -682,6 +683,7 @@
       };
 
       const $ = (selector) => document.querySelector(selector);
+      const QUOTA_API_URL = $("meta[name='quota-api-url']")?.getAttribute?.("content")?.trim() || "";
       const els = {
         fileInput: $("#fileInput"),
         browseButton: $("#browseButton"),
@@ -1118,6 +1120,57 @@
         return "使用状态未返回";
       }
 
+      function buildQuotaCheckPayload() {
+        return state.converted.map((converted) => {
+          const record = converted.sourceRecord || {};
+          return {
+            email: converted.email || "",
+            account_id: converted.accountId || firstNonEmpty(record.account_id, record.chatgpt_account_id, record.tokens?.account_id, record.credentials?.chatgpt_account_id) || "",
+            access_token: firstNonEmpty(record.accessToken, record.access_token, record.tokens?.accessToken, record.tokens?.access_token, record.token?.accessToken, record.token?.access_token, record.credentials?.accessToken, record.credentials?.access_token) || "",
+          };
+        });
+      }
+
+      function normalizeRemoteWindow(window, key) {
+        const value = window || {};
+        const usedPercent = numberOrUndefined(value.used_percent, value.usedPercent, value.used_percentage, value.percent);
+        const resetSeconds = numberOrUndefined(value.reset_after_seconds, value.resetAfterSeconds);
+        const reset = value.recovered === true || value.reset_expired === true
+          ? "已恢复"
+          : resetSeconds !== undefined
+            ? formatDuration(resetSeconds)
+            : typeof value.reset_at === "string" || typeof value.resetAt === "string"
+              ? "按返回时间恢复"
+              : "恢复时间未返回";
+        return { key, label: key, usedPercent, used: usedPercent === undefined ? undefined : usedPercent > 0, reset };
+      }
+
+      function normalizeRemoteResult(result) {
+        const windows = result?.quota?.windows || result?.windows || {};
+        const normalizedWindows = ["5h", "7d"].map((key) => normalizeRemoteWindow(windows[key], key));
+        return {
+          name: result?.email || result?.accountId || "未命名账号",
+          passed: result?.success === true,
+          used: typeof result?.usage?.used === "boolean" ? result.usage.used : normalizedWindows.some((window) => window.used === true) ? true : normalizedWindows.some((window) => window.used === false) ? false : undefined,
+          windows: normalizedWindows,
+          hasWindows: normalizedWindows.some((window) => window.usedPercent !== undefined || window.reset !== "恢复时间未返回"),
+          hasUsageSnapshot: result?.quota?.ok === true || Boolean(result?.usage),
+          detail: result?.message || "实时额度检测",
+        };
+      }
+
+      async function requestRemoteQuotaCheck() {
+        const response = await fetch(QUOTA_API_URL, {
+          method: "POST",
+          headers: { "Content-Type": "application/json", Accept: "application/json" },
+          body: JSON.stringify({ accounts: buildQuotaCheckPayload() }),
+        });
+        let payload;
+        try { payload = await response.json(); } catch { payload = {}; }
+        if (!response.ok || !Array.isArray(payload.results)) throw new Error(payload.error || `检测接口请求失败（HTTP ${response.status}）`);
+        return { checkedAt: payload.checkedAt || new Date().toISOString(), results: payload.results.map(normalizeRemoteResult) };
+      }
+
       function renderQuotaCheck() {
         const hasRecords = state.converted.length > 0;
         els.checkQuotaButton.disabled = !hasRecords;
@@ -1139,18 +1192,28 @@
         els.quotaCheckOutput.innerHTML = `<div class="quota-compact-row header"><div>账号</div><div>5h 已用</div><div>7d 已用</div></div>${rows}`;
       }
 
-      function runQuotaCheck() {
+      async function runQuotaCheck() {
         if (!state.converted.length) return;
-        state.quotaCheck = {
-          signature: quotaSignature(),
-          checkedAt: new Date().toISOString(),
-          results: state.converted.map(analyzeQuotaRecord),
-        };
-        renderQuotaCheck();
-        const unknown = state.quotaCheck.results.filter((result) => !result.hasUsageSnapshot).length;
-        const message = unknown ? `额度检测完成，${unknown} 个账号没有可读取的额度快照。` : "额度检测完成，结果已显示。";
-        setStatus(els.inputStatus, message, unknown ? "warning" : "success");
-        setStatus(els.outputStatus, message, unknown ? "warning" : "success");
+        const originalLabel = els.checkQuotaButton.textContent;
+        els.checkQuotaButton.disabled = true;
+        els.checkQuotaButton.textContent = "检测中…";
+        try {
+          const remote = QUOTA_API_URL ? await requestRemoteQuotaCheck() : { checkedAt: new Date().toISOString(), results: state.converted.map(analyzeQuotaRecord) };
+          state.quotaCheck = { signature: quotaSignature(), checkedAt: remote.checkedAt, results: remote.results };
+          renderQuotaCheck();
+          const unknown = state.quotaCheck.results.filter((result) => !result.hasUsageSnapshot).length;
+          const message = QUOTA_API_URL
+            ? (unknown ? `实时检测完成，${unknown} 个账号没有返回额度窗口。` : "实时额度检测完成，结果已显示。")
+            : (unknown ? `本地检测完成，${unknown} 个账号没有可读取的额度快照。` : "本地额度检测完成，结果已显示。");
+          setStatus(els.inputStatus, message, unknown ? "warning" : "success");
+          setStatus(els.outputStatus, message, unknown ? "warning" : "success");
+        } catch (error) {
+          setStatus(els.inputStatus, `额度检测失败：${error.message}`, "error");
+          setStatus(els.outputStatus, `额度检测失败：${error.message}`, "error");
+        } finally {
+          els.checkQuotaButton.disabled = !state.converted.length;
+          els.checkQuotaButton.textContent = originalLabel;
+        }
       }
 
       function buildSub2apiDocument(converted, now = new Date()) {

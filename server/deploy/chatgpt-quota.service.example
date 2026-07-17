@@ -1,0 +1,21 @@
+[Unit]
+Description=ChatGPT Session Converter quota API
+After=network.target
+
+[Service]
+Type=simple
+WorkingDirectory=/opt/chatgpt-session-converter
+ExecStart=/usr/bin/node /opt/chatgpt-session-converter/server/index.mjs
+EnvironmentFile=/etc/chatgpt-session-converter/quota.env
+Restart=always
+RestartSec=3
+User=quota-check
+Group=quota-check
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/log/chatgpt-session-converter
+
+[Install]
+WantedBy=multi-user.target

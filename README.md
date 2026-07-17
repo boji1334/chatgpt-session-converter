@@ -1,6 +1,6 @@
 # ChatGPT Session Converter
 
-纯前端批量 JSON 转换工具。所有文件都在当前浏览器中解析、转换和打包，不上传文件，也不写入浏览器存储。
+批量 JSON 转换工具。文件默认在当前浏览器中解析、转换和打包；额度实时检测通过可选的 Node.js 服务完成。
 
 在线使用：https://boji1334.github.io/chatgpt-session-converter/
 
@@ -18,7 +18,7 @@
 
 ## 安全边界
 
-页面不包含第三方脚本或远程资源，并通过 Content Security Policy 设置 `connect-src 'none'`，从浏览器层面禁止页面发起网络连接。
+转换功能不会上传文件，也不写入浏览器存储。实时额度检测开启后，只会把检测所需的账号 token 临时发送到自有检测服务；服务端不保存 token、不返回 token，也不应记录请求体日志。
 
 ## 本地使用
 
@@ -29,6 +29,21 @@
 ```bash
 npm test
 ```
+
+## 额度检测服务
+
+复制 `server/.env.example` 为服务端环境配置，设置允许的前端来源，然后启动：
+
+```bash
+npm run start:quota
+```
+
+服务提供：
+
+- `GET /healthz`
+- `POST /api/quota/check`
+
+将 `index.html` 中 `quota-api-url` 的内容设置为部署后的 API 地址，例如 `https://api.example.com/api/quota/check`。没有配置 API 地址时，页面仍可读取导入 JSON 中已有的本地额度快照。
 
 ## GitHub Pages
 
