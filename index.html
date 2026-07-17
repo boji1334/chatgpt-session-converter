@@ -429,6 +429,46 @@
     .quota-account-name { color: #31545a; font-size: 12px; font-weight: 800; }
     .quota-account-detail { margin-top: 3px; color: var(--muted); font-size: 11px; line-height: 1.5; }
 
+    .quota-compact {
+      margin-top: 14px;
+      border: 1px solid var(--line);
+      border-radius: 9px;
+      background: #fbfdfd;
+    }
+
+    .quota-compact-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      padding: 10px 11px;
+      border-bottom: 1px solid var(--line);
+    }
+
+    .quota-compact-title { color: #31545a; font-size: 12px; font-weight: 850; }
+    .quota-compact-hint { margin-top: 2px; color: var(--muted); font-size: 11px; }
+    .quota-compact-button { min-height: 32px; padding: 6px 10px; }
+
+    .quota-compact-table { width: 100%; font-size: 11px; }
+    .quota-compact-row {
+      display: grid;
+      grid-template-columns: minmax(0, 1.5fr) minmax(72px, .7fr) minmax(72px, .7fr);
+      gap: 8px;
+      align-items: center;
+      padding: 9px 11px;
+      border-bottom: 1px solid #e3ecea;
+    }
+
+    .quota-compact-row:last-child { border-bottom: 0; }
+    .quota-compact-row.header { padding-top: 7px; padding-bottom: 7px; background: #f1f7f5; color: #5a6f73; font-size: 10px; font-weight: 800; letter-spacing: .04em; }
+    .quota-compact-account { min-width: 0; overflow: hidden; color: #31545a; font-weight: 750; text-overflow: ellipsis; white-space: nowrap; }
+    .quota-compact-cell { min-width: 0; color: var(--ink); font-weight: 800; }
+    .quota-compact-cell .quota-value { display: block; font-size: 13px; }
+    .quota-compact-cell .quota-reset { display: block; margin-top: 2px; color: var(--muted); font-size: 10px; font-weight: 600; }
+    .quota-compact-empty { padding: 11px; color: var(--muted); font-size: 11px; line-height: 1.5; }
+    .quota-compact.ready { border-color: #b9d9d5; }
+    .quota-compact.warning { border-color: #e7bba7; }
+
     .format-switch {
       display: flex;
       flex-wrap: wrap;
@@ -556,6 +596,18 @@
           <label class="paste-label" for="pasteInput">或者直接粘贴 JSON</label>
           <textarea id="pasteInput" spellcheck="false" placeholder="粘贴一个对象、数组，或多行 JSON 对象"></textarea>
           <div class="file-list" id="fileList" aria-live="polite"></div>
+          <div class="quota-compact">
+            <div class="quota-compact-head">
+              <div>
+                <div class="quota-compact-title">额度检测</div>
+                <div class="quota-compact-hint">每个账号一行，只显示 5h / 7d 已用比例</div>
+              </div>
+              <button class="button primary quota-compact-button" id="checkQuotaButton" type="button" disabled>检测额度</button>
+            </div>
+            <div class="quota-compact-table" id="quotaCheckOutput" aria-live="polite">
+              <div class="quota-compact-empty">载入账号后点击“检测额度”。</div>
+            </div>
+          </div>
           <p class="status" id="inputStatus" aria-live="polite">等待输入。</p>
         </div>
       </article>
@@ -587,20 +639,12 @@
             <div class="stat"><span class="stat-value" id="invalidCount">0</span><span class="stat-label">跳过项</span></div>
           </div>
 
-          <div class="preview-heading">
-            <div class="section-label">记录预览 <span id="previewHint">暂无可预览记录</span></div>
-            <button class="button primary quota-inline-button" id="checkQuotaButton" type="button" disabled>检测额度</button>
-          </div>
+          <div class="section-label">记录预览 <span id="previewHint">暂无可预览记录</span></div>
           <div class="preview">
             <table>
               <thead><tr><th>#</th><th>来源</th><th>格式</th><th>摘要</th></tr></thead>
               <tbody id="previewBody"><tr><td class="empty-row" colspan="4">等待有效 JSON。</td></tr></tbody>
             </table>
-          </div>
-
-          <div class="section-label">额度检测 <span>读取已导入的检测快照</span></div>
-          <div class="quota-check" id="quotaCheckOutput" aria-live="polite">
-            <p class="quota-check-summary">载入账号后点击“检测额度”。检测只读取当前导入的数据，不会上传 token。</p>
           </div>
 
           <div class="section-label">合并后的 JSON</div>
@@ -1077,32 +1121,22 @@
       function renderQuotaCheck() {
         const hasRecords = state.converted.length > 0;
         els.checkQuotaButton.disabled = !hasRecords;
+        els.quotaCheckOutput.className = "quota-compact-table";
         if (!hasRecords) {
-          els.quotaCheckOutput.className = "quota-check";
-          els.quotaCheckOutput.innerHTML = '<p class="quota-check-summary">载入账号后点击“检测额度”。检测只读取当前导入的数据，不会上传 token。</p>';
+          els.quotaCheckOutput.innerHTML = '<div class="quota-compact-empty">载入账号后点击“检测额度”。</div>';
           return;
         }
 
         if (!state.quotaCheck || state.quotaCheck.signature !== quotaSignature()) {
-          els.quotaCheckOutput.className = "quota-check";
-          els.quotaCheckOutput.innerHTML = '<p class="quota-check-summary">已载入账号，可以检测额度使用情况。</p><p class="quota-check-meta">当前为本地快照读取；没有检测快照的账号会显示“未返回”。</p>';
+          els.quotaCheckOutput.innerHTML = '<div class="quota-compact-empty">已载入账号，点击右上角“检测额度”后显示每个账号的 5h / 7d 使用比例。</div>';
           return;
         }
 
         const results = state.quotaCheck.results;
-        const passedCount = results.filter((result) => result.passed).length;
-        const usedCount = results.filter((result) => result.used === true).length;
-        const unknownCount = results.filter((result) => result.used === undefined).length;
-        const primary = results[0];
-        const windowText = primary.windows.map((window) => `${window.label} 已用 ${formatPercent(window.usedPercent)}，${window.reset}`).join("；");
-        const summary = results.length === 1
-          ? `检测完成：${quotaSummary(primary)}；${quotaUsageLabel(primary.used)}；${windowText}`
-          : `检测完成：${passedCount}/${results.length} 个账号通过字段检查；${usedCount} 个账号已有使用记录${unknownCount ? `，${unknownCount} 个账号状态未返回` : ""}。`;
-        const rows = results.length > 1
-          ? `<div class="quota-account-list">${results.map((result) => `<div class="quota-account"><div class="quota-account-name">${escapeHtml(result.name)} · ${escapeHtml(quotaUsageLabel(result.used))}</div><div class="quota-account-detail">${escapeHtml(result.windows.map((window) => `${window.label} ${formatPercent(window.usedPercent)} · ${window.reset}`).join("；"))}</div></div>`).join("")}</div>`
-          : `<div class="quota-window-grid">${primary.windows.map((window) => `<div class="quota-window"><div class="quota-window-label">${escapeHtml(window.label)}</div><div class="quota-window-value">已用 ${escapeHtml(formatPercent(window.usedPercent))}</div><div class="quota-window-meta">${escapeHtml(window.reset)}</div></div>`).join("")}</div>`;
-        els.quotaCheckOutput.className = `quota-check ${passedCount === results.length ? "ready" : "warning"}`;
-        els.quotaCheckOutput.innerHTML = `<p class="quota-check-summary">${escapeHtml(summary)}</p>${rows}<p class="quota-check-meta">检测时间：${escapeHtml(new Date(state.quotaCheck.checkedAt).toLocaleString())} · ${escapeHtml(primary.detail)}</p>`;
+        const getWindow = (result, key) => result.windows.find((window) => window.key === key) || { usedPercent: undefined, reset: "未返回" };
+        const renderCell = (window) => `<div class="quota-compact-cell" title="${escapeHtml(window.reset)}"><span class="quota-value">${escapeHtml(formatPercent(window.usedPercent))}</span><span class="quota-reset">${escapeHtml(window.reset)}</span></div>`;
+        const rows = results.map((result) => `<div class="quota-compact-row"><div class="quota-compact-account" title="${escapeHtml(result.name)}">${escapeHtml(result.name)}</div>${renderCell(getWindow(result, "5h"))}${renderCell(getWindow(result, "7d"))}</div>`).join("");
+        els.quotaCheckOutput.innerHTML = `<div class="quota-compact-row header"><div>账号</div><div>5h 已用</div><div>7d 已用</div></div>${rows}`;
       }
 
       function runQuotaCheck() {
@@ -1114,7 +1148,9 @@
         };
         renderQuotaCheck();
         const unknown = state.quotaCheck.results.filter((result) => !result.hasUsageSnapshot).length;
-        setStatus(els.outputStatus, unknown ? `额度检测完成，${unknown} 个账号没有可读取的额度快照。` : "额度检测完成，结果已显示。", unknown ? "warning" : "success");
+        const message = unknown ? `额度检测完成，${unknown} 个账号没有可读取的额度快照。` : "额度检测完成，结果已显示。";
+        setStatus(els.inputStatus, message, unknown ? "warning" : "success");
+        setStatus(els.outputStatus, message, unknown ? "warning" : "success");
       }
 
       function buildSub2apiDocument(converted, now = new Date()) {
