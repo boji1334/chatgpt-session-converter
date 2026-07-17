@@ -1,7 +1,10 @@
 const WINDOW_ALIASES = {
   "5h": ["5h", "primary", "primary_window", "five_hour", "fiveHour"],
   "7d": ["7d", "secondary", "secondary_window", "seven_day", "sevenDay"],
+  "30d": ["30d", "monthly", "month", "monthly_window", "thirty_day", "thirtyDay"],
 };
+
+const WINDOW_MINUTES = { "5h": 300, "7d": 10080, "30d": 43200 };
 
 function asObject(value) {
   return value && typeof value === "object" && !Array.isArray(value) ? value : undefined;
@@ -47,7 +50,11 @@ function findWindow(containers, key) {
         const candidate = asObject(windows[alias]);
         if (candidate) return candidate;
       }
+      for (const candidate of Object.values(windows).map(asObject).filter(Boolean)) {
+        if (Number(candidate.window_minutes) === WINDOW_MINUTES[key] || Number(candidate.windowMinutes) === WINDOW_MINUTES[key]) return candidate;
+      }
     }
+    if (Number(container.window_minutes) === WINDOW_MINUTES[key] || Number(container.windowMinutes) === WINDOW_MINUTES[key]) return container;
   }
   return undefined;
 }
@@ -76,6 +83,7 @@ export function normalizeQuotaResponse(payload, account = {}) {
   const windows = {
     "5h": normalizeWindow(findWindow(containers, "5h"), "5h"),
     "7d": normalizeWindow(findWindow(containers, "7d"), "7d"),
+    "30d": normalizeWindow(findWindow(containers, "30d"), "30d"),
   };
   const rateLimit = firstObject(payload?.rate_limit, payload?.rateLimit, payload?.quota);
   const usage = firstObject(payload?.usage, payload?.data?.usage);
@@ -110,7 +118,7 @@ export function failedQuotaResult(account = {}, message = "检测失败", status
     status,
     connectivity: { ok: false },
     auth: { ok: status !== 401 && status !== 403 ? undefined : false },
-    quota: { ok: false, windows: { "5h": normalizeWindow(undefined, "5h"), "7d": normalizeWindow(undefined, "7d") } },
+    quota: { ok: false, windows: { "5h": normalizeWindow(undefined, "5h"), "7d": normalizeWindow(undefined, "7d"), "30d": normalizeWindow(undefined, "30d") } },
     usage: { used: undefined },
   };
 }

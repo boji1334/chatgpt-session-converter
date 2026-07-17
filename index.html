@@ -453,7 +453,7 @@
     .quota-compact-table { width: 100%; font-size: 11px; }
     .quota-compact-row {
       display: grid;
-      grid-template-columns: minmax(0, 1.5fr) minmax(72px, .7fr) minmax(72px, .7fr);
+      grid-template-columns: minmax(0, 1.35fr) repeat(var(--quota-columns, 2), minmax(78px, 1fr));
       gap: 8px;
       align-items: center;
       padding: 9px 11px;
@@ -464,7 +464,11 @@
     .quota-compact-row.header { padding-top: 7px; padding-bottom: 7px; background: #f1f7f5; color: #5a6f73; font-size: 10px; font-weight: 800; letter-spacing: .04em; }
     .quota-compact-account { min-width: 0; overflow: hidden; color: #31545a; font-weight: 750; text-overflow: ellipsis; white-space: nowrap; }
     .quota-compact-cell { min-width: 0; color: var(--ink); font-weight: 800; }
-    .quota-compact-cell .quota-value { display: block; font-size: 13px; }
+    .quota-progress-label { display: flex; justify-content: space-between; gap: 5px; color: #31545a; font-size: 11px; font-weight: 800; }
+    .quota-progress { height: 7px; margin-top: 5px; overflow: hidden; border-radius: 999px; background: #dce8e6; }
+    .quota-progress-fill { height: 100%; border-radius: inherit; background: linear-gradient(90deg, #2e9a75, #1c6d6a); transition: width .2s ease; }
+    .quota-progress-fill.warning { background: linear-gradient(90deg, #df9a55, #cb6d3d); }
+    .quota-progress-fill.unknown { width: 0 !important; background: #9eaeaf; }
     .quota-compact-cell .quota-reset { display: block; margin-top: 2px; color: var(--muted); font-size: 10px; font-weight: 600; }
     .quota-compact-empty { padding: 11px; color: var(--muted); font-size: 11px; line-height: 1.5; }
     .quota-compact.ready { border-color: #b9d9d5; }
@@ -732,6 +736,9 @@
         axonhub: "AxonHub Codex auth.json",
         codexmanager: "Codex-Manager 批量导入 JSON",
       };
+
+      const QUOTA_WINDOW_KEYS = ["5h", "7d", "30d"];
+      const QUOTA_WINDOW_LABELS = { "5h": "5h 限额", "7d": "周限额", "30d": "月限额" };
 
       const AXONHUB_PLACEHOLDER_REFRESH_TOKEN = "__missing_refresh_token__";
 
@@ -1070,9 +1077,9 @@
         const data = extractQuotaData(converted.sourceRecord);
         const quota = data.quota || {};
         const usage = data.usage || {};
-        const windows = ["5h", "7d"].map((key) => {
+        const windows = QUOTA_WINDOW_KEYS.map((key) => {
           const window = isPlainObject(data.windows[key]) ? data.windows[key] : undefined;
-          if (!window) return { key, label: key, usedPercent: undefined, used: undefined, reset: "未返回" };
+          if (!window) return { key, label: QUOTA_WINDOW_LABELS[key], usedPercent: undefined, used: undefined, reset: "恢复时间未返回" };
           let usedPercent = numberOrUndefined(window.used_percent, window.usedPercent, window.used_percentage, window.percent);
           const remainingPercent = numberOrUndefined(window.remaining_percent, window.remainingPercent);
           if (usedPercent === undefined && remainingPercent !== undefined) usedPercent = 100 - remainingPercent;
@@ -1085,10 +1092,10 @@
               : typeof window.reset_at === "string" || typeof window.resetAt === "string"
                 ? "按返回时间恢复"
                 : "恢复时间未返回";
-          return { key, label: typeof window.label === "string" ? window.label : key, usedPercent, used, reset };
+          return { key, label: typeof window.label === "string" ? window.label : QUOTA_WINDOW_LABELS[key], usedPercent, used, reset };
         });
 
-        const hasWindows = windows.some((window) => window.usedPercent !== undefined || window.used !== undefined || window.reset !== "未返回");
+        const hasWindows = windows.some((window) => window.usedPercent !== undefined || window.used !== undefined || window.reset !== "恢复时间未返回");
         const used = typeof usage.used === "boolean"
           ? usage.used
           : windows.some((window) => window.used === true)
@@ -1142,12 +1149,12 @@
             : typeof value.reset_at === "string" || typeof value.resetAt === "string"
               ? "按返回时间恢复"
               : "恢复时间未返回";
-        return { key, label: key, usedPercent, used: usedPercent === undefined ? undefined : usedPercent > 0, reset };
+        return { key, label: QUOTA_WINDOW_LABELS[key], usedPercent, used: usedPercent === undefined ? undefined : usedPercent > 0, reset };
       }
 
       function normalizeRemoteResult(result) {
         const windows = result?.quota?.windows || result?.windows || {};
-        const normalizedWindows = ["5h", "7d"].map((key) => normalizeRemoteWindow(windows[key], key));
+        const normalizedWindows = QUOTA_WINDOW_KEYS.map((key) => normalizeRemoteWindow(windows[key], key));
         return {
           name: result?.email || result?.accountId || "未命名账号",
           passed: result?.success === true,
@@ -1186,10 +1193,17 @@
         }
 
         const results = state.quotaCheck.results;
-        const getWindow = (result, key) => result.windows.find((window) => window.key === key) || { usedPercent: undefined, reset: "未返回" };
-        const renderCell = (window) => `<div class="quota-compact-cell" title="${escapeHtml(window.reset)}"><span class="quota-value">${escapeHtml(formatPercent(window.usedPercent))}</span><span class="quota-reset">${escapeHtml(window.reset)}</span></div>`;
-        const rows = results.map((result) => `<div class="quota-compact-row"><div class="quota-compact-account" title="${escapeHtml(result.name)}">${escapeHtml(result.name)}</div>${renderCell(getWindow(result, "5h"))}${renderCell(getWindow(result, "7d"))}</div>`).join("");
-        els.quotaCheckOutput.innerHTML = `<div class="quota-compact-row header"><div>账号</div><div>5h 已用</div><div>7d 已用</div></div>${rows}`;
+        const getWindow = (result, key) => result.windows.find((window) => window.key === key) || { usedPercent: undefined, reset: "恢复时间未返回" };
+        const renderCell = (window) => {
+          const hasPercent = typeof window.usedPercent === "number" && Number.isFinite(window.usedPercent);
+          const percent = hasPercent ? Math.max(0, Math.min(100, window.usedPercent)) : 0;
+          const fillClass = hasPercent ? percent >= 80 ? "warning" : "" : "unknown";
+          return `<div class="quota-compact-cell" title="${escapeHtml(window.reset)}"><div class="quota-progress-label"><span>${escapeHtml(hasPercent ? formatPercent(window.usedPercent) : "未返回")}</span><span>100%</span></div><div class="quota-progress" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${escapeHtml(String(percent))}" aria-label="${escapeHtml(window.label || window.key || "额度")}"><div class="quota-progress-fill ${fillClass}" style="width: ${percent}%"></div></div><span class="quota-reset">${escapeHtml(window.reset)}</span></div>`;
+        };
+        els.quotaCheckOutput.style.setProperty("--quota-columns", String(QUOTA_WINDOW_KEYS.length));
+        const header = QUOTA_WINDOW_KEYS.map((key) => `<div>${escapeHtml(QUOTA_WINDOW_LABELS[key])}</div>`).join("");
+        const rows = results.map((result) => `<div class="quota-compact-row"><div class="quota-compact-account" title="${escapeHtml(result.name)}">${escapeHtml(result.name)}</div>${QUOTA_WINDOW_KEYS.map((key) => renderCell(getWindow(result, key))).join("")}</div>`).join("");
+        els.quotaCheckOutput.innerHTML = `<div class="quota-compact-row header"><div>账号</div>${header}</div>${rows}`;
       }
 
       async function runQuotaCheck() {

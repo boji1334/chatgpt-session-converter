@@ -8,6 +8,7 @@ test("normalizes WHAM primary and secondary windows into 5h and 7d", () => {
     rate_limit: {
       primary_window: { used_percent: 12.5, reset_after_seconds: 7200 },
       secondary_window: { used_percent: 3, reset_after_seconds: 500000 },
+      monthly_window: { used_percent: 1, reset_after_seconds: 2000000 },
     },
   }, { email: "one@example.com", accountId: "acct-1" });
 
@@ -15,6 +16,7 @@ test("normalizes WHAM primary and secondary windows into 5h and 7d", () => {
   assert.equal(result.auth.plan, "plus");
   assert.equal(result.quota.windows["5h"].usedPercent, 12.5);
   assert.equal(result.quota.windows["7d"].usedPercent, 3);
+  assert.equal(result.quota.windows["30d"].usedPercent, 1);
   assert.equal(result.usage.used, true);
 });
 
