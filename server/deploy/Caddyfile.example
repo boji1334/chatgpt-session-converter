@@ -1,0 +1,15 @@
+api.example.com {
+	encode zstd gzip
+	header {
+		-Server
+	}
+
+	@agent_register path /api/agent/register
+	handle @agent_register {
+		reverse_proxy 127.0.0.1:8788
+	}
+
+	handle {
+		reverse_proxy 127.0.0.1:8787
+	}
+}
