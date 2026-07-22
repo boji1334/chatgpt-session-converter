@@ -23,7 +23,7 @@ function createFakeElement() {
   };
 }
 
-function loadPage() {
+function loadPage(config = {}) {
   const htmlPath = path.join(__dirname, "..", "at-to-sub2api.html");
   const html = fs.readFileSync(htmlPath, "utf8");
   const match = html.match(/<script>\s*([\s\S]*?)\s*<\/script>\s*<\/body>/);
@@ -56,12 +56,12 @@ function loadPage() {
     TextDecoder,
     TextEncoder,
     crypto: webcrypto,
-    fetch: async (url, options) => {
-      registrationRequest = { url, options, body: JSON.parse(options.body) };
+    fetch: async (url, requestOptions) => {
+      registrationRequest = { url, options: requestOptions, body: JSON.parse(requestOptions.body) };
       return {
-        ok: true,
-        status: 200,
-        async json() { return { ok: true, agent_runtime_id: "runtime-browser-fixture" }; },
+        ok: config.responseStatus ? config.responseStatus >= 200 && config.responseStatus < 300 : true,
+        status: config.responseStatus || 200,
+        async json() { return config.responsePayload || { ok: true, agent_runtime_id: "runtime-browser-fixture" }; },
       };
     },
     URL: { createObjectURL(blob) { downloadedBlob = blob; return "blob:test"; }, revokeObjectURL() {} },
@@ -185,6 +185,14 @@ async function testInvalidTokenDoesNotEnableDownload() {
   assert.match(page.elements.get("#status").className, /error/);
 }
 
+async function testMissingAgentBackendExplainsThatTokenIsNotTheProblem() {
+  const page = loadPage({ responseStatus: 404, responsePayload: { error: "Not found" } });
+  await generate(page, accessToken("account-backend", "backend@example.com"));
+  assert.equal(page.getDownloadedBlob(), undefined);
+  assert.match(page.elements.get("#status").textContent, /Agent 注册后端尚未部署/);
+  assert.match(page.elements.get("#status").textContent, /不是 AT 格式错误/);
+}
+
 function testStandaloneEntryIsLinkedFromMainPage() {
   const page = loadPage();
   const mainHtml = fs.readFileSync(path.join(__dirname, "..", "index.html"), "utf8");
@@ -200,6 +208,7 @@ async function main() {
   await testBearerTokenIsAccepted();
   await testCompleteSessionJsonIsAccepted();
   await testInvalidTokenDoesNotEnableDownload();
+  await testMissingAgentBackendExplainsThatTokenIsNotTheProblem();
   testStandaloneEntryIsLinkedFromMainPage();
   console.log("at-to-sub2api tests passed");
 }

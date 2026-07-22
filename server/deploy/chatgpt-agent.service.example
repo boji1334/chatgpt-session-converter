@@ -1,0 +1,20 @@
+[Unit]
+Description=ChatGPT Session Converter Agent registration API
+After=network.target
+
+[Service]
+Type=simple
+WorkingDirectory=/opt/chatgpt-session-converter
+ExecStart=/opt/chatgpt-session-converter/.venv/bin/python /opt/chatgpt-session-converter/server/agent_backend.py
+EnvironmentFile=/etc/chatgpt-session-converter/agent.env
+Restart=always
+RestartSec=3
+User=quota-check
+Group=quota-check
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+
+[Install]
+WantedBy=multi-user.target

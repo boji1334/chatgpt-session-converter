@@ -35,10 +35,12 @@ npm test
 
 ## 后端服务
 
-复制 `server/.env.example` 为服务端环境配置，设置允许的前端来源，然后启动：
+复制 `server/.env.example` 和 `server/agent.env.example` 为服务端环境配置，设置允许的前端来源。安装 Python Agent 后端依赖并分别启动两个服务：
 
 ```bash
+python -m pip install -r server/requirements-agent.txt
 npm run start:quota
+npm run start:agent
 ```
 
 服务提供：
@@ -46,6 +48,8 @@ npm run start:quota
 - `GET /healthz`
 - `POST /api/quota/check`
 - `POST /api/agent/register`
+
+Agent 注册接口由 `server/agent_backend.py` 提供，注册请求逻辑直接按 `codex_agent(2).py` 移植，使用 `curl_cffi` 的 Chrome impersonation。浏览器只提交 AT 与 Ed25519 公钥，私钥不会发送到后端。
 
 将 `index.html` 中 `quota-api-url` 和 `at-to-sub2api.html` 中 `agent-api-url` 设置为部署后的 API 地址。额度 API 未配置时，主页面仍可读取导入 JSON 中已有的本地额度快照；Agent Identity 注册接口需要可用的后端服务。
 

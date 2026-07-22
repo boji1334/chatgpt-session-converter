@@ -362,6 +362,12 @@
         let payload;
         try { payload = await response.json(); }
         catch { payload = {}; }
+        if (response.status === 404) {
+          throw new Error("Agent 注册后端尚未部署（HTTP 404）；这不是 AT 格式错误");
+        }
+        if (response.status === 401) {
+          throw new Error("AT 已失效或当前账号不能注册 Agent Runtime（HTTP 401）");
+        }
         if (!response.ok) throw new Error(payload.error || `Agent Runtime 注册失败（HTTP ${response.status}）`);
         const runtimeID = firstText(payload.agent_runtime_id, payload.agentRuntimeId);
         if (!runtimeID) throw new Error("注册服务没有返回 agent_runtime_id");
