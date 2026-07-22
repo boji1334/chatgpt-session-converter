@@ -266,15 +266,19 @@
 
     .file-list:empty { display: none; }
 
+    .file-card {
+      overflow: hidden;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: rgba(255,255,255,.78);
+    }
+
     .file-row {
       display: flex;
       align-items: center;
       justify-content: space-between;
       gap: 12px;
       padding: 10px 12px;
-      border: 1px solid var(--line);
-      border-radius: 8px;
-      background: rgba(255,255,255,.78);
     }
 
     .file-meta { min-width: 0; }
@@ -284,6 +288,44 @@
     .file-status.ok { color: #2e806d; }
     .file-status.error { color: #b15436; }
     .remove-file { min-height: 30px; padding: 4px 8px; font-size: 12px; }
+
+    .file-content {
+      border-top: 1px solid #e3ecea;
+      background: #f8fbfa;
+    }
+
+    .file-content summary {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      padding: 9px 12px;
+      color: #48666b;
+      font-size: 11px;
+      font-weight: 800;
+      cursor: pointer;
+      list-style: none;
+      user-select: none;
+    }
+
+    .file-content summary::-webkit-details-marker { display: none; }
+    .file-content summary::after { content: "展开"; color: var(--muted); font-weight: 650; }
+    .file-content[open] summary::after { content: "收起"; }
+    .file-content summary:hover { color: var(--teal-dark); }
+
+    .file-content-code {
+      max-height: 280px;
+      margin: 0;
+      overflow: auto;
+      padding: 12px 14px 14px;
+      border-top: 1px dashed #dce8e6;
+      background: #fbfdfd;
+      color: #2f4d53;
+      font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+      font-size: 11px;
+      line-height: 1.6;
+      white-space: pre;
+    }
 
     .stats {
       display: grid;
@@ -678,6 +720,8 @@
       const state = {
         sources: [],
         sourceRevision: 0,
+        nextSourceId: 1,
+        expandedSourceIds: new Set(),
         detected: [],
         converted: [],
         skipped: [],
@@ -1483,24 +1527,31 @@
       }
 
       function createFileSource(file) {
+        const id = `file-${state.nextSourceId++}`;
         return file.text().then((text) => {
           try {
             const records = parseJsonRecords(text);
-            return { name: file.name, size: file.size, records, accountCount: collectSessionLikeObjects(records, file.name).length, error: "" };
+            return { id, name: file.name, size: file.size, rawText: text, records, accountCount: collectSessionLikeObjects(records, file.name).length, error: "" };
           } catch (error) {
-            return { name: file.name, size: file.size, records: [], accountCount: 0, error: error.message };
+            return { id, name: file.name, size: file.size, rawText: text, records: [], accountCount: 0, error: error.message };
           }
         });
       }
 
       function addSources(newSources) {
+        const willHaveOneSource = state.sources.length + newSources.length === 1;
         state.sources.push(...newSources);
+        if (willHaveOneSource && newSources[0]) state.expandedSourceIds.add(newSources[0].id);
+        else if (state.sources.length > 1) state.expandedSourceIds.clear();
         state.sourceRevision += 1;
         render();
       }
 
       function removeSource(index) {
-        state.sources.splice(index, 1);
+        const [removed] = state.sources.splice(index, 1);
+        if (removed) state.expandedSourceIds.delete(removed.id);
+        if (state.sources.length === 1) state.expandedSourceIds.add(state.sources[0].id);
+        if (!state.sources.length) state.expandedSourceIds.clear();
         state.sourceRevision += 1;
         render();
       }
@@ -1511,10 +1562,12 @@
         if (text) {
           try {
             const records = parseJsonRecords(text);
-            state.sources.push({ name: "粘贴内容", size: new TextEncoder().encode(text).length, records, accountCount: collectSessionLikeObjects(records, "粘贴内容").length, error: "" });
+            state.sources.push({ id: "paste", name: "粘贴内容", size: new TextEncoder().encode(text).length, rawText: text, records, accountCount: collectSessionLikeObjects(records, "粘贴内容").length, error: "" });
           } catch (error) {
-            state.sources.push({ name: "粘贴内容", size: new TextEncoder().encode(text).length, records: [], accountCount: 0, error: error.message });
+            state.sources.push({ id: "paste", name: "粘贴内容", size: new TextEncoder().encode(text).length, rawText: text, records: [], accountCount: 0, error: error.message });
           }
+          if (state.sources.length === 1) state.expandedSourceIds.add("paste");
+          else state.expandedSourceIds.delete("paste");
         }
         state.sourceRevision += 1;
         render();
@@ -1528,6 +1581,7 @@
 
       function clearAll() {
         state.sources = [];
+        state.expandedSourceIds.clear();
         state.sourceRevision += 1;
         els.fileInput.value = "";
         els.pasteInput.value = "";
@@ -1538,13 +1592,30 @@
         els.fileList.innerHTML = state.sources.map((source, index) => {
           const status = source.error ? "解析失败" : `${source.accountCount ?? collectSessionLikeObjects(source.records, source.name).length} 个账号`;
           const statusClass = source.error ? "error" : "ok";
-          return `<div class="file-row">
-            <div class="file-meta">
-              <div class="file-name" title="${escapeHtml(sourceLabel(source))}">${escapeHtml(sourceLabel(source))}</div>
-              <div class="file-detail">${formatBytes(source.size)}${source.error ? ` · ${escapeHtml(source.error)}` : ""}</div>
+          let content = source.rawText || "";
+          if (!source.error) {
+            try {
+              const parsed = JSON.parse(content.replace(/^\uFEFF/, "").trim());
+              content = JSON.stringify(parsed, null, 2);
+            } catch {
+              const previewValue = source.records.length === 1 ? source.records[0] : source.records;
+              content = JSON.stringify(previewValue, null, 2);
+            }
+          }
+          const open = state.expandedSourceIds.has(source.id) ? " open" : "";
+          return `<div class="file-card">
+            <div class="file-row">
+              <div class="file-meta">
+                <div class="file-name" title="${escapeHtml(sourceLabel(source))}">${escapeHtml(sourceLabel(source))}</div>
+                <div class="file-detail">${formatBytes(source.size)}${source.error ? ` · ${escapeHtml(source.error)}` : ""}</div>
+              </div>
+              <span class="file-status ${statusClass}">${status}</span>
+              <button class="button remove-file" type="button" data-remove-index="${index}" aria-label="移除 ${escapeHtml(sourceLabel(source))}">移除</button>
             </div>
-            <span class="file-status ${statusClass}">${status}</span>
-            <button class="button remove-file" type="button" data-remove-index="${index}" aria-label="移除 ${escapeHtml(sourceLabel(source))}">移除</button>
+            <details class="file-content" data-source-id="${escapeHtml(source.id)}"${open}>
+              <summary><span>查看文件内容</span></summary>
+              <pre class="file-content-code">${escapeHtml(content)}</pre>
+            </details>
           </div>`;
         }).join("");
       }
@@ -1771,6 +1842,12 @@
         const button = event.target.closest("[data-remove-index]");
         if (button) removeSource(Number(button.dataset.removeIndex));
       });
+      els.fileList.addEventListener("toggle", (event) => {
+        const details = event.target.closest?.("details[data-source-id]");
+        if (!details) return;
+        if (details.open) state.expandedSourceIds.add(details.dataset.sourceId);
+        else state.expandedSourceIds.delete(details.dataset.sourceId);
+      }, true);
 
       ["dragenter", "dragover"].forEach((eventName) => els.dropzone.addEventListener(eventName, (event) => {
         event.preventDefault();

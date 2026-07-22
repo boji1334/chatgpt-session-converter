@@ -326,6 +326,33 @@ async function testFileInputCanSelectTheSameFileAgain() {
   assert.equal(fileInput.value, "");
   await new Promise((resolve) => setTimeout(resolve, 0));
   assert.equal(page.elements.get("#recordCount").textContent, 1);
+  assert.match(page.elements.get("#fileList").innerHTML, /查看文件内容/);
+  assert.match(page.elements.get("#fileList").innerHTML, /file-content[^>]*open/);
+  assert.match(page.elements.get("#fileList").innerHTML, /file@example\.com/);
+}
+
+async function testMultipleFilesUseSeparateCollapsedContentCards() {
+  const page = loadPageScript();
+  const fileInput = page.elements.get("#fileInput");
+  const contents = [
+    JSON.stringify({ email: "first@example.com", access_token: "first-token" }),
+    JSON.stringify({ email: "second@example.com", access_token: "second-token" }),
+  ];
+  fileInput.files = contents.map((content, index) => ({
+    name: `account-${index + 1}.json`,
+    type: "application/json",
+    size: content.length,
+    async text() { return content; },
+  }));
+  dispatch(fileInput, "change");
+  await new Promise((resolve) => setTimeout(resolve, 0));
+
+  const html = page.elements.get("#fileList").innerHTML;
+  assert.equal((html.match(/class="file-card"/g) || []).length, 2);
+  assert.equal((html.match(/class="file-content"/g) || []).length, 2);
+  assert.doesNotMatch(html, /file-content[^>]*open/);
+  assert.match(html, /first@example\.com/);
+  assert.match(html, /second@example\.com/);
 }
 
 function testQuotaApiIsAllowedByCsp() {
@@ -351,6 +378,7 @@ async function main() {
   testAgentIdentityShowsCompleteMissingFieldTemplates();
   testAllFormatsProduceJson();
   await testFileInputCanSelectTheSameFileAgain();
+  await testMultipleFilesUseSeparateCollapsedContentCards();
   testQuotaApiIsAllowedByCsp();
   testDropzoneDoesNotNestButtonSemantics();
   console.log("convert-session tests passed");
