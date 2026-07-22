@@ -235,6 +235,68 @@ function testFormatValidationReportsMissingFields() {
   assert.match(page.elements.get("#formatNotice").textContent, /account_id/);
 }
 
+function testAgentIdentityShowsCompleteMissingFieldTemplates() {
+  const page = loadPageScript();
+  setInput(page, {
+    exported_at: "2026-07-22T13:27:00+09:00",
+    proxies: [],
+    accounts: [{
+      name: "fixture@example.com",
+      type: "oauth",
+      platform: "openai",
+      credentials: {
+        auth_mode: "agentIdentity",
+        agent_runtime_id: "agent-fixture",
+        agent_private_key: "private-fixture",
+        account_id: "account-fixture",
+        workspace_id: "workspace-fixture",
+        chatgpt_user_id: "user-fixture",
+      },
+    }],
+    type: "sub2api-data",
+    version: 1,
+  });
+
+  assert.equal(page.elements.get("#recordCount").textContent, 1);
+  assert.equal(page.elements.get("#invalidCount").textContent, 1);
+  assert.match(page.elements.get("#formatNotice").textContent, /access_token/);
+  assert.match(page.elements.get("#formatNotice").textContent, /id_token/);
+  assert.match(page.elements.get("#formatNotice").textContent, /refresh_token/);
+  assert.match(page.elements.get("#formatNotice").textContent, /完整 sub2api 格式/);
+
+  const sub2api = readOutput(page);
+  assert.equal(sub2api.accounts.length, 1);
+  assert.equal(sub2api.accounts[0].credentials.access_token, "缺少");
+  assert.equal(sub2api.accounts[0].credentials.id_token, "缺少");
+  assert.equal(sub2api.accounts[0].credentials.refresh_token, "缺少");
+  assert.equal(sub2api.accounts[0].credentials.chatgpt_account_id, "account-fixture");
+  assert.equal(sub2api.accounts[0].credentials.chatgpt_user_id, "user-fixture");
+
+  const expectedMissingPaths = {
+    cpa: (value) => value.access_token,
+    cockpit: (value) => value.id_token,
+    "9router": (value) => value.accessToken,
+    codex: (value) => value.tokens.access_token,
+    axonhub: (value) => value.tokens.refresh_token,
+    codexmanager: (value) => value.tokens.id_token,
+  };
+  for (const [format, readMissing] of Object.entries(expectedMissingPaths)) {
+    selectFormat(page, format);
+    const output = readOutput(page);
+    assert.equal(readMissing(output), "缺少", `${format} should show its complete missing-field template`);
+    assert.match(page.elements.get("#outputStatus").textContent, new RegExp(FORMAT_LABEL_FOR_TEST[format]));
+  }
+}
+
+const FORMAT_LABEL_FOR_TEST = {
+  cpa: "CPA",
+  cockpit: "Cockpit",
+  "9router": "9router",
+  codex: "Codex",
+  axonhub: "AxonHub",
+  codexmanager: "Codex-Manager",
+};
+
 function testAllFormatsProduceJson() {
   const page = loadPageScript();
   const idToken = jwtWithPayload(authClaims("account-all"));
@@ -286,6 +348,7 @@ async function main() {
   testLastRefreshIsPreserved();
   testBatchConversionPreservesAllSub2apiAccounts();
   testFormatValidationReportsMissingFields();
+  testAgentIdentityShowsCompleteMissingFieldTemplates();
   testAllFormatsProduceJson();
   await testFileInputCanSelectTheSameFileAgain();
   testQuotaApiIsAllowedByCsp();

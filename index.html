@@ -678,6 +678,7 @@
       const state = {
         sources: [],
         sourceRevision: 0,
+        detected: [],
         converted: [],
         skipped: [],
         formatIssues: [],
@@ -741,6 +742,7 @@
       const QUOTA_WINDOW_LABELS = { "5h": "5h 限额", "7d": "周限额", "30d": "月限额" };
 
       const AXONHUB_PLACEHOLDER_REFRESH_TOKEN = "__missing_refresh_token__";
+      const MISSING_FIELD = "缺少";
 
       const sampleRecords = [
         { type: "codex", account_id: "example-account-01", email: "alpha@example.com", access_token: "example-access-token-01", expired: "2099-01-01T00:00:00Z" },
@@ -947,6 +949,170 @@
         return email.trim().toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_+|_+$/g, "");
       }
 
+      function getRawSessionFields(record) {
+        const accessToken = firstNonEmpty(record.accessToken, record.access_token, record.tokens?.accessToken, record.tokens?.access_token, record.token?.accessToken, record.token?.access_token, record.credentials?.accessToken, record.credentials?.access_token);
+        const refreshToken = firstNonEmpty(record.refreshToken, record.refresh_token, record.tokens?.refreshToken, record.tokens?.refresh_token, record.token?.refreshToken, record.token?.refresh_token, record.credentials?.refresh_token);
+        const idToken = firstNonEmpty(record.idToken, record.id_token, record.tokens?.idToken, record.tokens?.id_token, record.token?.idToken, record.token?.id_token, record.credentials?.id_token);
+        const accountId = firstNonEmpty(record.account?.id, record.account_id, record.tokens?.accountId, record.tokens?.account_id, record.chatgptAccountId, record.chatgpt_account_id, record.meta?.chatgptAccountId, record.meta?.chatgpt_account_id, record.providerSpecificData?.chatgptAccountId, record.providerSpecificData?.chatgpt_account_id, record.credentials?.account_id, record.credentials?.chatgpt_account_id, record.provider === "codex" ? record.id : undefined);
+        const workspaceId = firstNonEmpty(record.account?.workspaceId, record.account?.workspace_id, record.workspaceId, record.workspace_id, record.meta?.workspaceId, record.meta?.workspace_id, record.providerSpecificData?.workspaceId, record.providerSpecificData?.workspace_id, record.credentials?.workspace_id);
+        const userId = firstNonEmpty(record.user?.id, record.user_id, record.chatgptUserId, record.chatgpt_user_id, record.providerSpecificData?.chatgptUserId, record.providerSpecificData?.chatgpt_user_id, record.credentials?.chatgpt_user_id);
+        const explicitEmail = firstNonEmpty(record.user?.email, record.email, record.meta?.label, record.label, record.credentials?.email, record.providerSpecificData?.email);
+        const email = firstNonEmpty(explicitEmail, typeof record.name === "string" && record.name.includes("@") ? record.name : undefined);
+        const name = firstNonEmpty(record.name, email);
+        const expiresAt = firstNonEmpty(normalizeTimestamp(record.expires), normalizeTimestamp(record.expiresAt), normalizeTimestamp(record.expired), normalizeTimestamp(record.expires_at), normalizeTimestamp(record.credentials?.expires_at));
+        const lastRefresh = firstNonEmpty(normalizeTimestamp(record.last_refresh), normalizeTimestamp(record.lastRefresh), normalizeTimestamp(record.extra?.last_refresh), normalizeTimestamp(record.meta?.last_refresh));
+        const planType = firstNonEmpty(record.account?.planType, record.account?.plan_type, record.planType, record.plan_type, record.providerSpecificData?.chatgptPlanType, record.providerSpecificData?.chatgpt_plan_type, record.credentials?.plan_type);
+        const authMode = firstNonEmpty(record.auth_mode, record.authMode, record.credentials?.auth_mode);
+        return { accessToken, refreshToken, idToken, accountId, workspaceId, userId, email, name, expiresAt, lastRefresh, planType, authMode };
+      }
+
+      function looksLikeSessionRecord(record) {
+        if (!isPlainObject(record)) return false;
+        const fields = getRawSessionFields(record);
+        if (fields.accessToken) return true;
+        const platform = String(firstNonEmpty(record.platform, record.provider, "")).toLowerCase();
+        const type = String(firstNonEmpty(record.type, record.authType, "")).toLowerCase();
+        const authMode = String(firstNonEmpty(fields.authMode, "")).toLowerCase();
+        const hasCredentialContainer = isPlainObject(record.credentials) || isPlainObject(record.tokens) || isPlainObject(record.token);
+        return (hasCredentialContainer && ["openai", "codex"].includes(platform))
+          || (hasCredentialContainer && ["oauth", "chatgpt", "agentidentity"].includes(type))
+          || ["oauth", "chatgpt", "agentidentity"].includes(authMode);
+      }
+
+      function diagnosticValue(value) {
+        return value === undefined || value === null || value === "" ? MISSING_FIELD : value;
+      }
+
+      function getMissingCredentialMessage(record) {
+        const fields = getRawSessionFields(record);
+        const missing = [];
+        if (!fields.accessToken) missing.push("access_token");
+        if (!fields.idToken) missing.push("id_token");
+        if (!fields.refreshToken) missing.push("refresh_token");
+        return missing.length ? `缺少字段：${missing.join("、")}` : "账号字段不完整";
+      }
+
+      function buildDiagnosticRecord(record, format) {
+        const fields = getRawSessionFields(record);
+        const missing = diagnosticValue;
+        const expiresIn = getExpiresIn(fields.expiresAt, new Date());
+        const emailKey = toEmailKey(fields.email);
+
+        if (format === "cpa") return {
+          type: "codex",
+          account_id: missing(fields.accountId),
+          chatgpt_account_id: missing(fields.accountId),
+          email: missing(fields.email),
+          name: missing(fields.name),
+          plan_type: missing(fields.planType),
+          chatgpt_plan_type: missing(fields.planType),
+          id_token: missing(fields.idToken),
+          access_token: missing(fields.accessToken),
+          refresh_token: missing(fields.refreshToken),
+          session_token: missing(firstNonEmpty(record.sessionToken, record.session_token, record.credentials?.session_token)),
+          last_refresh: missing(fields.lastRefresh),
+          expired: missing(fields.expiresAt),
+          disabled: normalizeBoolean(record.disabled, false),
+        };
+        if (format === "cockpit") return {
+          type: "codex",
+          id_token: missing(fields.idToken),
+          access_token: missing(fields.accessToken),
+          refresh_token: missing(fields.refreshToken),
+          account_id: missing(fields.accountId),
+          last_refresh: missing(fields.lastRefresh),
+          email: missing(fields.email),
+          expired: missing(fields.expiresAt),
+          account_note: missing(firstNonEmpty(record.account_note, record.accountInfo, record.account_info, record.note, record.notes, record.remark)),
+        };
+        if (format === "9router") return {
+          accessToken: missing(fields.accessToken),
+          refreshToken: missing(fields.refreshToken),
+          expiresAt: missing(fields.expiresAt),
+          testStatus: firstNonEmpty(record.testStatus, record.test_status, "active"),
+          expiresIn: missing(expiresIn),
+          providerSpecificData: { chatgptAccountId: missing(fields.accountId), chatgptPlanType: missing(fields.planType) },
+          id: missing(fields.accountId),
+          provider: "codex",
+          authType: "oauth",
+          name: missing(fields.name),
+          email: missing(fields.email),
+          priority: record.priority !== "" && Number.isFinite(Number(record.priority)) ? Number(record.priority) : 9,
+          isActive: typeof record.isActive === "boolean" ? record.isActive : !normalizeBoolean(record.disabled, false),
+          createdAt: missing(normalizeTimestamp(record.createdAt)),
+          updatedAt: missing(normalizeTimestamp(record.updatedAt)),
+        };
+        if (format === "codex") return {
+          auth_mode: "chatgpt",
+          OPENAI_API_KEY: null,
+          tokens: {
+            id_token: missing(fields.idToken),
+            access_token: missing(fields.accessToken),
+            refresh_token: missing(fields.refreshToken),
+            account_id: missing(fields.accountId),
+          },
+          last_refresh: missing(fields.lastRefresh),
+        };
+        if (format === "axonhub") return {
+          auth_mode: "chatgpt",
+          last_refresh: missing(fields.lastRefresh),
+          tokens: {
+            access_token: missing(fields.accessToken),
+            refresh_token: missing(fields.refreshToken),
+            id_token: missing(fields.idToken),
+          },
+        };
+        if (format === "codexmanager") return {
+          tokens: {
+            access_token: missing(fields.accessToken),
+            refresh_token: missing(fields.refreshToken),
+            id_token: missing(fields.idToken),
+            account_id: missing(fields.accountId),
+            chatgpt_account_id: missing(fields.accountId),
+          },
+          meta: {
+            label: missing(fields.name),
+            workspace_id: missing(fields.workspaceId),
+            chatgpt_account_id: missing(fields.accountId),
+            note: "Imported from ChatGPT session",
+          },
+        };
+        return {
+          name: missing(fields.name),
+          platform: "openai",
+          type: "oauth",
+          expires_at: missing(fields.expiresAt),
+          auto_pause_on_expired: fields.expiresAt ? true : MISSING_FIELD,
+          concurrency: 10,
+          priority: 1,
+          credentials: {
+            access_token: missing(fields.accessToken),
+            refresh_token: missing(fields.refreshToken),
+            id_token: missing(fields.idToken),
+            chatgpt_account_id: missing(fields.accountId),
+            chatgpt_user_id: missing(fields.userId),
+            email: missing(fields.email),
+            expires_at: missing(fields.expiresAt),
+            expires_in: missing(expiresIn),
+            plan_type: missing(fields.planType),
+          },
+          extra: {
+            email: missing(fields.email),
+            email_key: missing(emailKey),
+            name: missing(fields.name),
+            auth_provider: missing(firstNonEmpty(record.authProvider, record.auth_provider, fields.authMode)),
+            source: "chatgpt_web_session",
+            last_refresh: missing(fields.lastRefresh),
+          },
+        };
+      }
+
+      function buildDiagnosticOutputDocument() {
+        const records = state.detected.map((item) => buildDiagnosticRecord(item.value, state.format));
+        if (state.format === "sub2api") return { exported_at: normalizeTimestamp(new Date()), proxies: [], accounts: records };
+        return records.length === 1 ? records[0] : records;
+      }
+
       function collectSessionLikeObjects(value, sourceName = "pasted-json") {
         const found = [];
         const visited = new WeakSet();
@@ -955,8 +1121,7 @@
           if (isPlainObject(item)) {
             if (visited.has(item)) return;
             visited.add(item);
-            const token = firstNonEmpty(item.accessToken, item.access_token, item.tokens?.accessToken, item.tokens?.access_token, item.token?.accessToken, item.token?.access_token, item.credentials?.accessToken, item.credentials?.access_token);
-            if (token) {
+            if (looksLikeSessionRecord(item)) {
               found.push({ value: item, sourceName, path });
               return;
             }
@@ -975,7 +1140,7 @@
       function convertSession(record, options = {}) {
         if (!isPlainObject(record)) throw new Error("session 不是 JSON 对象");
         const accessToken = firstNonEmpty(record.accessToken, record.access_token, record.tokens?.accessToken, record.tokens?.access_token, record.token?.accessToken, record.token?.access_token, record.credentials?.accessToken, record.credentials?.access_token);
-        if (!accessToken) throw new Error("缺少 accessToken");
+        if (!accessToken) throw new Error(getMissingCredentialMessage(record));
         const sessionToken = firstNonEmpty(record.sessionToken, record.session_token, record.tokens?.sessionToken, record.tokens?.session_token, record.token?.sessionToken, record.token?.session_token, record.credentials?.session_token);
         const refreshToken = firstNonEmpty(record.refreshToken, record.refresh_token, record.tokens?.refreshToken, record.tokens?.refresh_token, record.token?.refreshToken, record.token?.refresh_token, record.credentials?.refresh_token);
         const inputIdToken = firstNonEmpty(record.idToken, record.id_token, record.tokens?.idToken, record.tokens?.id_token, record.token?.idToken, record.token?.id_token, record.credentials?.id_token);
@@ -988,7 +1153,7 @@
         const accessTokenExpiresAt = hasRefreshToken ? undefined : unixSecondsFromJwtExp(payload?.exp);
         const expiresAt = firstNonEmpty(payload ? timestampFromUnixSeconds(payload.exp) : undefined, normalizeTimestamp(record.expires), normalizeTimestamp(record.expiresAt), normalizeTimestamp(record.expired), normalizeTimestamp(record.expires_at));
         const email = firstNonEmpty(record.user?.email, record.email, record.meta?.label, record.label, record.credentials?.email, record.providerSpecificData?.email, profile.email, idPayload?.email, payload?.email);
-        const accountId = firstNonEmpty(record.account?.id, record.account_id, record.tokens?.accountId, record.tokens?.account_id, record.chatgptAccountId, record.chatgpt_account_id, record.meta?.chatgptAccountId, record.meta?.chatgpt_account_id, record.tokens?.chatgptAccountId, record.tokens?.chatgpt_account_id, record.providerSpecificData?.chatgptAccountId, record.providerSpecificData?.chatgpt_account_id, record.credentials?.chatgpt_account_id, auth.chatgpt_account_id, idAuth.chatgpt_account_id, record.provider === "codex" ? record.id : undefined);
+        const accountId = firstNonEmpty(record.account?.id, record.account_id, record.tokens?.accountId, record.tokens?.account_id, record.chatgptAccountId, record.chatgpt_account_id, record.meta?.chatgptAccountId, record.meta?.chatgpt_account_id, record.tokens?.chatgptAccountId, record.tokens?.chatgpt_account_id, record.providerSpecificData?.chatgptAccountId, record.providerSpecificData?.chatgpt_account_id, record.credentials?.account_id, record.credentials?.chatgpt_account_id, auth.chatgpt_account_id, idAuth.chatgpt_account_id, record.provider === "codex" ? record.id : undefined);
         const chatgptAccountId = firstNonEmpty(record.chatgptAccountId, record.chatgpt_account_id, record.meta?.chatgptAccountId, record.meta?.chatgpt_account_id, record.tokens?.chatgptAccountId, record.tokens?.chatgpt_account_id, record.providerSpecificData?.chatgptAccountId, record.providerSpecificData?.chatgpt_account_id, record.credentials?.chatgpt_account_id, auth.chatgpt_account_id, idAuth.chatgpt_account_id);
         const workspaceId = firstNonEmpty(record.account?.workspaceId, record.account?.workspace_id, record.workspaceId, record.workspace_id, record.meta?.workspaceId, record.meta?.workspace_id, record.providerSpecificData?.workspaceId, record.providerSpecificData?.workspace_id, record.credentials?.workspace_id, payload?.workspace_id, idPayload?.workspace_id);
         const userId = firstNonEmpty(record.user?.id, record.user_id, record.chatgptUserId, record.providerSpecificData?.chatgptUserId, record.providerSpecificData?.chatgpt_user_id, auth.chatgpt_user_id, auth.user_id, idAuth.chatgpt_user_id, idAuth.user_id);
@@ -1269,8 +1434,14 @@
 
       function renderFormatNotice() {
         if (!state.converted.length) {
-          els.formatNotice.textContent = "载入账号后会检查当前格式所需字段。";
-          els.formatNotice.className = "format-notice";
+          if (state.skipped.length) {
+            const messages = [...new Set(state.skipped.map((item) => item.error))].join("；");
+            els.formatNotice.textContent = `发现 ${state.skipped.length} 个账号，已在下方显示完整 ${FORMAT_LABELS[state.format]} 格式；${messages}，对应位置已标记“${MISSING_FIELD}”。`;
+            els.formatNotice.className = "format-notice error";
+          } else {
+            els.formatNotice.textContent = "载入账号后会检查当前格式所需字段。";
+            els.formatNotice.className = "format-notice";
+          }
           return;
         }
 
@@ -1287,7 +1458,12 @@
           ? "CPA 合并 JSON 是数组；请下载 CPA 批量 ZIP，解压后将其中的 JSON 文件上传到 CPAMP/CLIProxyAPI"
           : "";
 
-        if (errorRecords.size) {
+        if (state.skipped.length) {
+          const skippedMessages = [...new Set(state.skipped.map((item) => item.error))].join("；");
+          const convertedNote = affectedRecords.size && summary ? `；已转换账号还需注意：${summary}${remaining}` : "";
+          els.formatNotice.textContent = `已生成 ${state.converted.length} 个账号，另有 ${state.skipped.length} 个账号未进入输出：${skippedMessages}${convertedNote}。`;
+          els.formatNotice.className = "format-notice error";
+        } else if (errorRecords.size) {
           els.formatNotice.textContent = `${errorRecords.size} 个账号缺少 ${FORMAT_LABELS[state.format]} 关键字段：${summary}${remaining}。${cpaCompatibilityNote ? `${cpaCompatibilityNote}。` : "仍可下载，但目标工具可能拒绝导入。"}`;
           els.formatNotice.className = "format-notice error";
         } else if (affectedRecords.size) {
@@ -1390,16 +1566,19 @@
 
       function render() {
         const candidates = [];
+        const detected = [];
         state.skipped = [];
         state.sources.forEach((source) => {
           collectSessionLikeObjects(source.records, source.name).forEach((session) => {
+            detected.push(session);
             try {
               candidates.push(convertSession(session.value, { sourceName: session.sourceName, sourcePath: session.path }));
             } catch (error) {
-              state.skipped.push({ sourceName: session.sourceName, error: error.message });
+              state.skipped.push({ sourceName: session.sourceName, sourcePath: session.path, value: session.value, error: error.message });
             }
           });
         });
+        state.detected = detected;
         state.converted = candidates;
         state.formatIssues = state.converted.flatMap((record, recordIndex) => getFormatIssues(record, state.format).map((issue) => ({ ...issue, recordIndex })));
         if (state.quotaCheck && state.quotaCheck.signature !== quotaSignature()) state.quotaCheck = null;
@@ -1408,14 +1587,15 @@
         const affectedRecords = new Set(state.formatIssues.map((issue) => issue.recordIndex));
         const errorRecords = new Set(state.formatIssues.filter((issue) => issue.level === "error").map((issue) => issue.recordIndex));
         const validSourceCount = state.sources.filter((source) => !source.error).length;
-        const merged = state.converted.length ? JSON.stringify(buildOutputDocument(), null, state.formatJson ? 2 : 0) : "";
+        const previewDocument = state.converted.length ? buildOutputDocument() : state.detected.length ? buildDiagnosticOutputDocument() : undefined;
+        const merged = previewDocument ? JSON.stringify(previewDocument, null, state.formatJson ? 2 : 0) : "";
 
         renderFiles();
         renderPreview();
         renderQuotaCheck();
         renderFormatNotice();
         els.fileCount.textContent = validSourceCount;
-        els.recordCount.textContent = state.converted.length;
+        els.recordCount.textContent = state.detected.length;
         els.warningCount.textContent = affectedRecords.size;
         els.invalidCount.textContent = failed;
         els.output.value = merged;
@@ -1440,13 +1620,17 @@
           const details = [`已生成 ${state.converted.length} 个账号`];
           if (failed) details.push(`跳过 ${failed} 项`);
           setStatus(els.inputStatus, `${details.join("，")}。`, failed ? "error" : "success");
-          if (failed) setStatus(els.outputStatus, "部分输入未进入输出，请检查文件内容。", "error");
+          if (failed) {
+            const missingSummary = [...new Set(state.skipped.map((item) => item.error))].join("；");
+            setStatus(els.outputStatus, `部分输入未进入输出：${missingSummary || "请检查文件内容"}。`, "error");
+          }
           else if (errorRecords.size) setStatus(els.outputStatus, `${FORMAT_LABELS[state.format]} 结果已生成，但 ${errorRecords.size} 个账号缺少关键字段。`, "error");
           else if (affectedRecords.size) setStatus(els.outputStatus, `${FORMAT_LABELS[state.format]} 结果已生成，${affectedRecords.size} 个账号需要注意字段完整性。`, "warning");
           else setStatus(els.outputStatus, `${FORMAT_LABELS[state.format]} 合并结果已更新。`, "success");
         } else {
-          setStatus(els.inputStatus, "没有找到可转换账号，请检查 JSON 是否包含 accessToken 和账号信息。", "error");
-          setStatus(els.outputStatus, "暂无有效输出。", "error");
+          const missingSummary = [...new Set(state.skipped.map((item) => item.error))].join("；");
+          setStatus(els.inputStatus, state.skipped.length ? `发现 ${state.skipped.length} 个账号，但${missingSummary}。` : "没有找到可转换账号，请检查 JSON 是否包含 accessToken 和账号信息。", "error");
+          setStatus(els.outputStatus, state.skipped.length ? `当前显示 ${FORMAT_LABELS[state.format]} 完整字段模板，缺失值已标记“${MISSING_FIELD}”。` : "暂无有效输出。", "error");
         }
       }
 
