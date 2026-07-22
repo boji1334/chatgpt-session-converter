@@ -46,8 +46,16 @@ function allowedOrigin(request) {
   return ALLOWED_ORIGINS.has("*") || ALLOWED_ORIGINS.has(origin) ? origin : undefined;
 }
 
+function clientAddress(request) {
+  const cloudflareAddress = request.headers["cf-connecting-ip"];
+  if (typeof cloudflareAddress === "string" && cloudflareAddress.trim()) return cloudflareAddress.trim();
+  const forwarded = request.headers["x-forwarded-for"];
+  if (typeof forwarded === "string" && forwarded.trim()) return forwarded.split(",", 1)[0].trim();
+  return request.socket.remoteAddress || "unknown";
+}
+
 function clientAllowed(request) {
-  const address = request.socket.remoteAddress || "unknown";
+  const address = clientAddress(request);
   const now = Date.now();
   const existing = rateBuckets.get(address);
   if (!existing || now - existing.startedAt >= RATE_LIMIT_WINDOW_MS) {
