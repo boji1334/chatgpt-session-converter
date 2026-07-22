@@ -5,7 +5,7 @@
   <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; object-src 'none'; base-uri 'none'; form-action 'none'">
   <meta name="referrer" content="no-referrer">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="description" content="粘贴 ChatGPT accessToken，一键下载 sub2api JSON 文件。">
+  <meta name="description" content="粘贴 ChatGPT accessToken 或完整 session JSON，一键下载 sub2api JSON 文件。">
   <title>越接码下载sub2文件</title>
   <style>
     :root {
@@ -196,17 +196,17 @@
       <header class="head">
         <p class="eyebrow">One-click exporter</p>
         <h1>越接码下载sub2文件</h1>
-        <p class="lead">粘贴一个 ChatGPT accessToken，点击按钮，立即下载可导入的 sub2api JSON 文件。</p>
+        <p class="lead">粘贴 ChatGPT accessToken 或完整 session JSON，点击按钮，立即下载可导入的 sub2api JSON 文件。</p>
       </header>
       <div class="body">
-        <label for="tokenInput">ChatGPT accessToken</label>
-        <textarea id="tokenInput" spellcheck="false" autocomplete="off" placeholder="eyJhbGciOi...&#10;&#10;也支持 Bearer eyJhbGciOi..."></textarea>
+        <label for="tokenInput">ChatGPT accessToken / session JSON</label>
+        <textarea id="tokenInput" spellcheck="false" autocomplete="off" placeholder="eyJhbGciOi...&#10;&#10;也支持 Bearer eyJ... 或包含 accessToken、user、account 的完整 JSON"></textarea>
         <p class="privacy">全部处理都在当前浏览器完成，不上传、不保存。只有 AT 时，token 到期后需要重新生成文件。</p>
         <div class="actions">
           <button class="button primary" id="downloadButton" type="button">下载sub2文件</button>
           <button class="button secondary" id="clearButton" type="button">清空</button>
         </div>
-        <p class="status" id="status" aria-live="polite">等待粘贴 AT。</p>
+        <p class="status" id="status" aria-live="polite">等待粘贴 AT 或 session JSON。</p>
       </div>
     </section>
     <footer class="foot">
@@ -248,7 +248,7 @@
       }
 
       function parseToken(raw) {
-        const token = raw.trim().replace(/^Bearer\s+/i, "").trim();
+        const token = String(raw || "").trim().replace(/^Bearer\s+/i, "").trim();
         if (!token || /\s/.test(token)) throw new Error("请只粘贴一个完整的 AT");
         const segments = token.split(".");
         if (segments.length !== 3) throw new Error("AT 不是有效的 JWT 格式");
@@ -263,6 +263,39 @@
 
       function firstText(...values) {
         return values.find((value) => typeof value === "string" && value.trim())?.trim();
+      }
+
+      function parseInput(raw) {
+        const text = raw.trim();
+        if (!text) throw new Error("请先粘贴 AT 或 session JSON");
+
+        if (text.startsWith("{") || text.startsWith("[")) {
+          let parsed;
+          try { parsed = JSON.parse(text); }
+          catch { throw new Error("session JSON 解析失败"); }
+          const record = Array.isArray(parsed) ? parsed[0] : parsed;
+          if (!record || typeof record !== "object" || Array.isArray(record)) throw new Error("session JSON 中没有账号对象");
+          const accessToken = firstText(
+            record.accessToken,
+            record.access_token,
+            record.tokens?.accessToken,
+            record.tokens?.access_token,
+            record.credentials?.accessToken,
+            record.credentials?.access_token
+          );
+          if (!accessToken) throw new Error("session JSON 缺少 accessToken");
+          return { ...parseToken(accessToken), record };
+        }
+
+        return { ...parseToken(text), record: {} };
+      }
+
+      function expirySeconds(payload, record) {
+        const tokenExpiry = Math.trunc(Number(payload.exp));
+        if (Number.isFinite(tokenExpiry) && tokenExpiry > 0) return tokenExpiry;
+        const sourceExpiry = firstText(record.expires, record.expiresAt, record.expired, record.expires_at, record.credentials?.expires_at);
+        const parsed = sourceExpiry ? Date.parse(sourceExpiry) : NaN;
+        return Number.isFinite(parsed) ? Math.trunc(parsed / 1000) : NaN;
       }
 
       function stripEmpty(value) {
@@ -290,14 +323,27 @@
       }
 
       function buildSub2Document(raw) {
-        const { token, payload } = parseToken(raw);
+        const { token, payload, record } = parseInput(raw);
         const auth = payload["https://api.openai.com/auth"] || {};
         const profile = payload["https://api.openai.com/profile"] || {};
-        const accountId = firstText(auth.chatgpt_account_id);
-        const userId = firstText(auth.chatgpt_user_id, auth.user_id);
-        const email = firstText(profile.email, payload.email);
-        const planType = firstText(auth.chatgpt_plan_type) || "free";
-        const expires = Math.trunc(Number(payload.exp));
+        const accountId = firstText(
+          record.account?.id,
+          record.account_id,
+          record.chatgpt_account_id,
+          record.credentials?.chatgpt_account_id,
+          auth.chatgpt_account_id
+        );
+        const userId = firstText(
+          record.user?.id,
+          record.user_id,
+          record.chatgpt_user_id,
+          record.credentials?.chatgpt_user_id,
+          auth.chatgpt_user_id,
+          auth.user_id
+        );
+        const email = firstText(record.user?.email, record.email, record.credentials?.email, profile.email, payload.email);
+        const planType = firstText(record.account?.planType, record.account?.plan_type, record.planType, record.plan_type, record.credentials?.plan_type, auth.chatgpt_plan_type) || "free";
+        const expires = expirySeconds(payload, record);
 
         if (!accountId) throw new Error("AT 缺少 chatgpt_account_id");
         if (!Number.isFinite(expires) || expires <= 0) throw new Error("AT 缺少有效过期时间");
@@ -365,7 +411,7 @@
 
       function clearAll() {
         tokenInput.value = "";
-        setStatus("等待粘贴 AT。");
+        setStatus("等待粘贴 AT 或 session JSON。");
         tokenInput.focus();
       }
 

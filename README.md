@@ -10,7 +10,7 @@
 
 - 选择或拖入多个 JSON 文件
 - 粘贴单对象、数组、逐行 JSON 或连续 JSON
-- 使用“越接码下载sub2文件”独立入口粘贴一个 ChatGPT AT，一键下载 sub2api 导入文件
+- 使用“越接码下载sub2文件”独立入口粘贴 ChatGPT AT 或完整 session JSON，一键下载 sub2api 导入文件
 - 输出 CPA、sub2api、Cockpit、9router、Codex、AxonHub、Codex-Manager
 - 下载一个合并 JSON
 - 下载每个账号一个 JSON 文件的 ZIP

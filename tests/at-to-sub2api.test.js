@@ -85,6 +85,10 @@ function accessToken(accountId, email, planType = "plus") {
   });
 }
 
+function tokenWithPayload(payload) {
+  return jwt(payload);
+}
+
 function generate(page, raw) {
   page.elements.get("#tokenInput").value = raw;
   page.elements.get("#downloadButton").click();
@@ -120,6 +124,30 @@ async function testBearerTokenIsAccepted() {
   assert.equal(result.accounts[0].credentials.plan_type, "team");
 }
 
+async function testCompleteSessionJsonIsAccepted() {
+  const page = loadPage();
+  const token = tokenWithPayload({ exp: 4102444800 });
+  const session = {
+    WARNING_BANNER: "fixture",
+    user: { id: "user-session", name: "Session User", email: "session@example.com" },
+    expires: "2100-01-01T00:00:00.000Z",
+    account: { id: "account-session", planType: "pro" },
+    accessToken: token,
+    authProvider: "auth0",
+    sessionToken: "session-fixture",
+  };
+  generate(page, JSON.stringify(session, null, 2));
+
+  const result = JSON.parse(await page.getDownloadedBlob().text());
+  assert.equal(result.accounts.length, 1);
+  assert.equal(result.accounts[0].credentials.access_token, token);
+  assert.equal(result.accounts[0].credentials.chatgpt_account_id, "account-session");
+  assert.equal(result.accounts[0].credentials.chatgpt_user_id, "user-session");
+  assert.equal(result.accounts[0].credentials.email, "session@example.com");
+  assert.equal(result.accounts[0].credentials.plan_type, "pro");
+  assert.match(page.elements.get("#status").textContent, /已生成并下载/);
+}
+
 function testInvalidTokenDoesNotEnableDownload() {
   const page = loadPage();
   generate(page, "not-a-jwt");
@@ -140,6 +168,7 @@ function testStandaloneEntryIsLinkedFromMainPage() {
 async function main() {
   await testSingleTokenProducesImportFile();
   await testBearerTokenIsAccepted();
+  await testCompleteSessionJsonIsAccepted();
   testInvalidTokenDoesNotEnableDownload();
   testStandaloneEntryIsLinkedFromMainPage();
   console.log("at-to-sub2api tests passed");
