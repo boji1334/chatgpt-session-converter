@@ -1,6 +1,9 @@
 import http from "node:http";
+import path from "node:path";
 import { URL } from "node:url";
+import { fileURLToPath } from "node:url";
 import { failedQuotaResult, normalizeAccountInput, normalizeQuotaResponse } from "./quota.mjs";
+import { VisitCounter, VISIT_PAGE_IDS } from "./visits.mjs";
 
 const PORT = Number(process.env.PORT || 8787);
 const HOST = process.env.HOST || "127.0.0.1";
@@ -16,6 +19,9 @@ const ALLOWED_ORIGINS = new Set((process.env.ALLOWED_ORIGINS || "http://localhos
 const RATE_LIMIT_WINDOW_MS = 60_000;
 const RATE_LIMIT_MAX = Number(process.env.RATE_LIMIT_MAX || 30);
 const rateBuckets = new Map();
+const VISIT_STORE_PATH = process.env.VISIT_STORE_PATH || path.join(path.dirname(fileURLToPath(import.meta.url)), "data", "visits.json");
+const VISIT_TIME_ZONE = process.env.VISIT_TIME_ZONE || "Asia/Shanghai";
+const visitCounter = new VisitCounter({ filePath: VISIT_STORE_PATH, timeZone: VISIT_TIME_ZONE });
 
 function json(res, status, body, origin) {
   const headers = {
@@ -227,6 +233,35 @@ async function handleAgentRegister(request, response, origin) {
   }
 }
 
+async function handleVisit(request, response, origin) {
+  if (!clientAllowed(request)) {
+    json(response, 429, { ok: false, error: "请求过于频繁，请稍后重试" }, origin);
+    return;
+  }
+
+  let body;
+  try {
+    body = await readBody(request);
+  } catch (error) {
+    json(response, 400, { ok: false, error: error.message }, origin);
+    return;
+  }
+
+  const page = typeof body?.page === "string" ? body.page.trim() : "";
+  if (!VISIT_PAGE_IDS.has(page)) {
+    json(response, 400, { ok: false, error: "page 不是有效的统计页面" }, origin);
+    return;
+  }
+
+  try {
+    const stats = await visitCounter.record(page);
+    json(response, 200, { ok: true, stats }, origin);
+  } catch (error) {
+    console.error("visit counter write failed", error);
+    json(response, 500, { ok: false, error: "访问统计写入失败" }, origin);
+  }
+}
+
 const server = http.createServer(async (request, response) => {
   const origin = allowedOrigin(request);
   if (request.headers.origin && !origin) {
@@ -255,6 +290,10 @@ const server = http.createServer(async (request, response) => {
   }
   if (request.method === "POST" && url.pathname === "/api/agent/register") {
     await handleAgentRegister(request, response, origin);
+    return;
+  }
+  if (request.method === "POST" && url.pathname === "/api/visits") {
+    await handleVisit(request, response, origin);
     return;
   }
   json(response, 404, { ok: false, error: "Not found" }, origin);

@@ -6,7 +6,7 @@
   "scripts": {
     "start:quota": "node server/index.mjs",
     "start:agent": "python server/agent_backend.py",
-    "test": "node tests/convert-session.test.js && node tests/at-to-sub2api.test.js && node --test tests/quota-server.test.js tests/quota-integration.test.js tests/agent-register.integration.test.js && python tests/test_agent_backend.py"
+    "test": "node tests/convert-session.test.js && node tests/at-to-sub2api.test.js && node tests/at-to-cpa.test.js && node --test tests/quota-server.test.js tests/quota-integration.test.js tests/agent-register.integration.test.js tests/visits.test.js && python tests/test_agent_backend.py"
   },
   "license": "MIT"
 }

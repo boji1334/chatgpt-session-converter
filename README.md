@@ -6,11 +6,14 @@
 
 越接码下载sub2文件：https://boji1334.github.io/chatgpt-session-converter/at-to-sub2api.html
 
+越接码下载CPA文件：https://boji1334.github.io/chatgpt-session-converter/at-to-cpa.html
+
 ## 功能
 
 - 选择或拖入多个 JSON 文件
 - 粘贴单对象、数组、逐行 JSON 或连续 JSON
 - 使用“越接码下载sub2文件”独立入口粘贴 ChatGPT AT 或完整 session JSON，注册 Runtime 并下载可在 sub2api“数据导入”中直接上传的 Agent Identity 数据文件
+- 使用“越接码下载CPA文件”独立入口粘贴 ChatGPT AT 或完整 session JSON，注册 Agent Runtime 并下载本站适配版 CLIProxyAPI 可直接导入的 Codex Agent Identity auth JSON
 - 输出 CPA、sub2api、Cockpit、9router、Codex、AxonHub、Codex-Manager
 - 下载一个合并 JSON
 - 下载每个账号一个 JSON 文件的 ZIP

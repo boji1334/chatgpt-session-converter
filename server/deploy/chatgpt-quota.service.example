@@ -15,7 +15,8 @@ NoNewPrivileges=true
 PrivateTmp=true
 ProtectSystem=strict
 ProtectHome=true
-ReadWritePaths=/var/log/chatgpt-session-converter
+StateDirectory=chatgpt-session-converter
+ReadWritePaths=/var/log/chatgpt-session-converter /var/lib/chatgpt-session-converter
 
 [Install]
 WantedBy=multi-user.target

@@ -1,0 +1,341 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; connect-src https://api.cuixiaoxuan.com http://127.0.0.1:8788; object-src 'none'; base-uri 'none'; form-action 'none'">
+  <meta name="referrer" content="no-referrer">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="粘贴 ChatGPT accessToken 或完整 session JSON，注册 Agent Identity 并下载 CPA 可导入的 Codex 账号文件。">
+  <meta name="agent-api-url" content="https://api.cuixiaoxuan.com/api/agent/register">
+  <title>越接码下载CPA文件</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --ink: #17262d;
+      --muted: #68767b;
+      --line: #d5e1df;
+      --teal: #1c6d6a;
+      --teal-dark: #145451;
+      --teal-soft: #e3f2f0;
+      --orange: #a85b32;
+      --orange-soft: #fff0e8;
+      --red: #b15436;
+    }
+
+    * { box-sizing: border-box; }
+    html { min-width: 320px; background: #edf5f3; }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      display: grid;
+      place-items: center;
+      color: var(--ink);
+      background:
+        radial-gradient(circle at 18% 5%, rgba(255,255,255,.96), transparent 34%),
+        linear-gradient(135deg, rgba(255,255,255,.38), transparent 55%),
+        #edf5f3;
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+
+    button, textarea { font: inherit; }
+    button { cursor: pointer; }
+    .shell { width: min(680px, calc(100% - 28px)); padding: 28px 0; }
+    .back {
+      display: inline-flex;
+      margin: 0 0 14px 2px;
+      color: var(--teal-dark);
+      font-size: 13px;
+      font-weight: 750;
+      text-decoration: none;
+    }
+    .card {
+      overflow: hidden;
+      border: 1px solid rgba(28, 109, 106, .22);
+      border-radius: 18px;
+      background: rgba(255,255,255,.91);
+      box-shadow: 0 24px 70px rgba(29, 63, 69, .13);
+      backdrop-filter: blur(15px);
+    }
+    .head { padding: 30px 34px 24px; border-bottom: 1px solid var(--line); }
+    .eyebrow {
+      margin: 0 0 8px;
+      color: var(--teal);
+      font-size: 11px;
+      font-weight: 850;
+      letter-spacing: .18em;
+      text-transform: uppercase;
+    }
+    h1 { margin: 0; font-size: clamp(31px, 6vw, 47px); letter-spacing: -.055em; line-height: .98; }
+    .lead { margin: 13px 0 0; max-width: 570px; color: var(--muted); font-size: 14px; line-height: 1.7; }
+    .body { padding: 26px 34px 30px; }
+    label { display: block; margin-bottom: 9px; font-size: 13px; font-weight: 780; }
+    textarea {
+      width: 100%;
+      min-height: 210px;
+      resize: vertical;
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      padding: 14px 15px;
+      outline: none;
+      color: #163137;
+      background: #fbfdfc;
+      font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+      font-size: 12px;
+      line-height: 1.55;
+      transition: border-color .16s ease, box-shadow .16s ease;
+    }
+    textarea:focus { border-color: var(--teal); box-shadow: 0 0 0 4px rgba(28, 109, 106, .1); }
+    .privacy { margin: 11px 0 0; color: var(--muted); font-size: 12px; line-height: 1.65; }
+    .actions { display: grid; grid-template-columns: 1fr auto; gap: 10px; margin-top: 18px; }
+    .button { border-radius: 11px; padding: 12px 17px; border: 1px solid transparent; font-weight: 800; }
+    .button:disabled { cursor: not-allowed; opacity: .55; }
+    .primary { color: white; background: var(--teal-dark); }
+    .primary:hover { background: var(--teal); }
+    .secondary { border-color: var(--line); color: var(--ink); background: white; }
+    .status {
+      min-height: 44px;
+      margin: 12px 0 0;
+      padding: 12px 13px;
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      color: var(--muted);
+      background: #f7faf9;
+      font-size: 12px;
+      line-height: 1.55;
+    }
+    .status.success { border-color: #a9d7cf; color: var(--teal-dark); background: var(--teal-soft); }
+    .status.warning { border-color: #e7c5b1; color: var(--orange); background: var(--orange-soft); }
+    .status.error { border-color: #e8b7a8; color: var(--red); background: #fff3ef; }
+    .foot { display: flex; justify-content: space-between; gap: 16px; padding: 15px 3px 0; color: var(--muted); font-size: 11px; }
+    .foot a { color: var(--teal-dark); font-weight: 750; text-decoration: none; }
+
+    @media (max-width: 560px) {
+      .head, .body { padding-left: 20px; padding-right: 20px; }
+      .actions { grid-template-columns: 1fr; }
+      .foot { align-items: flex-start; flex-direction: column; gap: 6px; }
+    }
+  </style>
+</head>
+<body>
+  <main class="shell">
+    <a class="back" href="./">← 返回原转换器</a>
+    <section class="card">
+      <header class="head">
+        <p class="eyebrow">Agent Identity exporter</p>
+        <h1>越接码下载CPA文件</h1>
+        <p class="lead">粘贴 ChatGPT accessToken 或完整 session JSON，注册 Agent Runtime，下载 CLIProxyAPI / CPA 可直接导入的 Codex Agent Identity 文件。</p>
+      </header>
+      <div class="body">
+        <label for="tokenInput">ChatGPT accessToken / session JSON</label>
+        <textarea id="tokenInput" spellcheck="false" autocomplete="off" placeholder="eyJhbGciOi...&#10;&#10;也支持 Bearer eyJ... 或包含 accessToken、user、account 的完整 JSON"></textarea>
+        <p class="privacy">Ed25519 私钥只在当前浏览器生成并写入下载文件；AT 与公钥会发送到本站注册服务，用于向 OpenAI 注册 Runtime，服务端不保存凭据。该文件不包含 AT，也不受 AT 到期时间限制；导入端需使用本站适配 Agent Identity 的 CPA 版本。</p>
+        <div class="actions">
+          <button class="button primary" id="downloadButton" type="button">注册并下载 CPA 文件</button>
+          <button class="button secondary" id="clearButton" type="button">清空</button>
+        </div>
+        <p class="status" id="status" aria-live="polite">等待粘贴 AT 或 session JSON。</p>
+      </div>
+    </section>
+    <footer class="foot">
+      <span>输出：CPA Codex auth JSON · Agent Identity</span>
+      <a href="./at-to-sub2api.html">需要 sub2 格式？前往 sub2 文件入口 →</a>
+    </footer>
+  </main>
+
+  <script>
+    (() => {
+      "use strict";
+
+      const agentApiUrl = document.querySelector('meta[name="agent-api-url"]')?.content?.trim() || "";
+      const tokenInput = document.querySelector("#tokenInput");
+      const downloadButton = document.querySelector("#downloadButton");
+      const clearButton = document.querySelector("#clearButton");
+      const status = document.querySelector("#status");
+
+      function setStatus(message, kind = "") {
+        status.textContent = message;
+        status.className = `status${kind ? ` ${kind}` : ""}`;
+      }
+
+      function decodeBase64Url(value) {
+        const normalized = value.replace(/-/g, "+").replace(/_/g, "/");
+        const padded = normalized + "=".repeat((4 - normalized.length % 4) % 4);
+        const bytes = Uint8Array.from(atob(padded), (character) => character.charCodeAt(0));
+        return new TextDecoder().decode(bytes);
+      }
+
+      function bytesToBase64(bytes) {
+        let binary = "";
+        const view = bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes);
+        for (let index = 0; index < view.length; index += 0x8000) binary += String.fromCharCode(...view.subarray(index, index + 0x8000));
+        return btoa(binary);
+      }
+
+      function firstText(...values) {
+        return values.find((value) => typeof value === "string" && value.trim())?.trim();
+      }
+
+      function parseToken(value) {
+        let token = value.trim();
+        if (/^Bearer\s+/i.test(token)) token = token.replace(/^Bearer\s+/i, "").trim();
+        const parts = token.split(".");
+        if (parts.length !== 3) throw new Error("输入内容不是有效的 JWT accessToken");
+        let payload;
+        try { payload = JSON.parse(decodeBase64Url(parts[1])); }
+        catch { throw new Error("AT 的 JWT payload 解析失败"); }
+        return { token, payload };
+      }
+
+      function parseInput(raw) {
+        const text = raw.trim();
+        if (!text) throw new Error("请先粘贴 AT 或 session JSON");
+        if (text.startsWith("{") || text.startsWith("[")) {
+          let parsed;
+          try { parsed = JSON.parse(text); }
+          catch { throw new Error("session JSON 解析失败"); }
+          const record = Array.isArray(parsed) ? parsed[0] : parsed;
+          if (!record || typeof record !== "object" || Array.isArray(record)) throw new Error("session JSON 中没有账号对象");
+          const accessToken = firstText(
+            record.accessToken,
+            record.access_token,
+            record.tokens?.accessToken,
+            record.tokens?.access_token,
+            record.credentials?.accessToken,
+            record.credentials?.access_token
+          );
+          if (!accessToken) throw new Error("session JSON 缺少 accessToken");
+          return { ...parseToken(accessToken), record };
+        }
+        return { ...parseToken(text), record: {} };
+      }
+
+      function expirySeconds(payload, record) {
+        const tokenExpiry = Math.trunc(Number(payload.exp));
+        if (Number.isFinite(tokenExpiry) && tokenExpiry > 0) return tokenExpiry;
+        const sourceExpiry = firstText(record.expires, record.expiresAt, record.expired, record.expires_at, record.credentials?.expires_at);
+        const parsed = sourceExpiry ? Date.parse(sourceExpiry) : NaN;
+        return Number.isFinite(parsed) ? Math.trunc(parsed / 1000) : NaN;
+      }
+
+      function accountInfo(payload, record) {
+        const auth = payload["https://api.openai.com/auth"] || {};
+        const profile = payload["https://api.openai.com/profile"] || {};
+        const accountId = firstText(record.account?.id, record.account_id, record.chatgpt_account_id, record.credentials?.chatgpt_account_id, auth.chatgpt_account_id);
+        const userId = firstText(record.user?.id, record.user_id, record.chatgpt_user_id, record.credentials?.chatgpt_user_id, auth.chatgpt_user_id, auth.user_id);
+        const email = firstText(record.user?.email, record.email, record.credentials?.email, profile.email, payload.email);
+        const planType = firstText(record.account?.planType, record.account?.plan_type, record.planType, record.plan_type, record.credentials?.plan_type, auth.chatgpt_plan_type) || "free";
+        const fedramp = record.account?.isFedrampCompliantWorkspace === true || record.chatgpt_account_is_fedramp === true;
+        const expires = expirySeconds(payload, record);
+        if (!accountId) throw new Error("AT 缺少 chatgpt_account_id");
+        if (Number.isFinite(expires) && expires <= Math.trunc(Date.now() / 1000)) throw new Error("AT 已经过期，请换一个新的 AT");
+        return { accountId, userId, email, planType, fedramp };
+      }
+
+      function sshEd25519PublicKey(rawPublicKey) {
+        const algorithm = new TextEncoder().encode("ssh-ed25519");
+        const raw = rawPublicKey instanceof Uint8Array ? rawPublicKey : new Uint8Array(rawPublicKey);
+        if (raw.length !== 32) throw new Error("浏览器生成的 Ed25519 公钥长度异常");
+        const blob = new Uint8Array(4 + algorithm.length + 4 + raw.length);
+        const view = new DataView(blob.buffer);
+        view.setUint32(0, algorithm.length, false);
+        blob.set(algorithm, 4);
+        view.setUint32(4 + algorithm.length, raw.length, false);
+        blob.set(raw, 8 + algorithm.length);
+        return `ssh-ed25519 ${bytesToBase64(blob)}`;
+      }
+
+      async function generateKeyMaterial() {
+        if (!globalThis.crypto?.subtle) throw new Error("当前浏览器不支持 Web Crypto");
+        let keyPair;
+        try { keyPair = await crypto.subtle.generateKey({ name: "Ed25519" }, true, ["sign", "verify"]); }
+        catch { throw new Error("当前浏览器不支持 Ed25519，请使用最新版 Chrome 或 Edge"); }
+        const [privateDer, publicRaw] = await Promise.all([
+          crypto.subtle.exportKey("pkcs8", keyPair.privateKey),
+          crypto.subtle.exportKey("raw", keyPair.publicKey),
+        ]);
+        return {
+          privateKeyBase64: bytesToBase64(privateDer),
+          publicKeySSH: sshEd25519PublicKey(publicRaw),
+        };
+      }
+
+      async function registerRuntime(accessToken, publicKeySSH) {
+        if (!agentApiUrl) throw new Error("页面没有配置 Agent 注册服务");
+        const response = await fetch(agentApiUrl, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ access_token: accessToken, agent_public_key: publicKeySSH }),
+        });
+        let payload;
+        try { payload = await response.json(); }
+        catch { payload = {}; }
+        if (response.status === 404) throw new Error("Agent 注册后端尚未部署（HTTP 404）；这不是 AT 格式错误");
+        if (response.status === 401) throw new Error("AT 已失效或当前账号不能注册 Agent Runtime（HTTP 401）");
+        if (!response.ok) throw new Error(payload.error || `Agent Runtime 注册失败（HTTP ${response.status}）`);
+        const runtimeID = firstText(payload.agent_runtime_id, payload.agentRuntimeId);
+        if (!runtimeID) throw new Error("注册服务没有返回 agent_runtime_id");
+        return runtimeID;
+      }
+
+      function buildCpaDocument(runtimeID, privateKeyBase64, info) {
+        return {
+          type: "codex",
+          auth_mode: "agentIdentity",
+          agent_runtime_id: runtimeID,
+          agent_private_key: privateKeyBase64,
+          account_id: info.accountId,
+          chatgpt_user_id: info.userId || "",
+          email: info.email || "",
+          plan_type: info.planType,
+          chatgpt_account_is_fedramp: info.fedramp,
+          disabled: false,
+          note: "Agent Identity：需使用本站适配版 CPA",
+        };
+      }
+
+      function downloadDocument(documentValue, filename) {
+        const blob = new Blob([JSON.stringify(documentValue, null, 2)], { type: "application/json;charset=utf-8" });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement("a");
+        link.href = url;
+        link.download = filename;
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+        setTimeout(() => URL.revokeObjectURL(url), 1000);
+      }
+
+      async function downloadCpa() {
+        const originalLabel = downloadButton.textContent;
+        downloadButton.disabled = true;
+        downloadButton.textContent = "正在注册 Runtime...";
+        setStatus("正在本地生成 Ed25519 密钥并注册 Agent Runtime...", "warning");
+        try {
+          const { token, payload, record } = parseInput(tokenInput.value);
+          const info = accountInfo(payload, record);
+          const keyMaterial = await generateKeyMaterial();
+          const runtimeID = await registerRuntime(token, keyMaterial.publicKeySSH);
+          const cpaDocument = buildCpaDocument(runtimeID, keyMaterial.privateKeyBase64, info);
+          const safeName = (info.email || info.accountId).replace(/[^a-zA-Z0-9._-]+/g, "_");
+          downloadDocument(cpaDocument, `codex-agent-identity-${safeName}.json`);
+          setStatus(`CPA Agent Identity 文件已下载：${info.email || info.accountId} · ${info.planType}`, "success");
+        } catch (error) {
+          setStatus(error.message, "error");
+        } finally {
+          downloadButton.disabled = false;
+          downloadButton.textContent = originalLabel;
+        }
+      }
+
+      function clearAll() {
+        tokenInput.value = "";
+        setStatus("等待粘贴 AT 或 session JSON。");
+        tokenInput.focus();
+      }
+
+      downloadButton.addEventListener("click", downloadCpa);
+      clearButton.addEventListener("click", clearAll);
+    })();
+  </script>
+</body>
+</html>

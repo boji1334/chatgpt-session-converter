@@ -3,3 +3,4 @@ __pycache__/
 *.py[cod]
 *.zip
 *.log
+server/data/visits.json
