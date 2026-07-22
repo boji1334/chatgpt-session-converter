@@ -1,0 +1,377 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; object-src 'none'; base-uri 'none'; form-action 'none'">
+  <meta name="referrer" content="no-referrer">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="粘贴 ChatGPT accessToken，一键下载 sub2api JSON 文件。">
+  <title>越接码下载sub2文件</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --ink: #17262d;
+      --muted: #68767b;
+      --line: #d5e1df;
+      --teal: #1c6d6a;
+      --teal-dark: #145451;
+      --teal-soft: #e3f2f0;
+      --orange: #a85b32;
+      --orange-soft: #fff0e8;
+      --red: #b15436;
+    }
+
+    * { box-sizing: border-box; }
+    html { min-width: 320px; background: #edf5f3; }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      display: grid;
+      place-items: center;
+      color: var(--ink);
+      background:
+        radial-gradient(circle at 18% 5%, rgba(255,255,255,.96), transparent 34%),
+        linear-gradient(135deg, rgba(255,255,255,.38), transparent 55%),
+        #edf5f3;
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+
+    button, textarea { font: inherit; }
+    button { cursor: pointer; }
+
+    .shell {
+      width: min(680px, calc(100% - 28px));
+      padding: 28px 0;
+    }
+
+    .back {
+      display: inline-block;
+      margin: 0 0 16px 2px;
+      color: var(--teal-dark);
+      font-size: 13px;
+      font-weight: 800;
+      text-decoration: none;
+    }
+
+    .back:hover { text-decoration: underline; }
+
+    .card {
+      overflow: hidden;
+      border: 1px solid rgba(203,219,216,.96);
+      border-radius: 16px;
+      background: rgba(255,255,255,.92);
+      box-shadow: 0 28px 80px rgba(31,67,69,.13);
+    }
+
+    .head {
+      padding: 30px 32px 23px;
+      border-bottom: 1px solid var(--line);
+    }
+
+    .eyebrow {
+      margin: 0 0 8px;
+      color: var(--teal);
+      font-size: 11px;
+      font-weight: 900;
+      letter-spacing: .16em;
+      text-transform: uppercase;
+    }
+
+    h1 {
+      margin: 0 0 10px;
+      font-size: clamp(32px, 7vw, 48px);
+      line-height: 1.02;
+      letter-spacing: -.04em;
+    }
+
+    .lead {
+      margin: 0;
+      color: var(--muted);
+      font-size: 14px;
+      line-height: 1.65;
+    }
+
+    .body { padding: 25px 32px 30px; }
+
+    label {
+      display: block;
+      margin-bottom: 8px;
+      color: #35515a;
+      font-size: 12px;
+      font-weight: 850;
+    }
+
+    textarea {
+      width: 100%;
+      min-height: 190px;
+      padding: 14px;
+      resize: vertical;
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      outline: none;
+      background: #fbfdfd;
+      color: var(--ink);
+      font-family: ui-monospace, SFMono-Regular, Consolas, "Liberation Mono", monospace;
+      font-size: 12px;
+      line-height: 1.6;
+    }
+
+    textarea:focus {
+      border-color: var(--teal);
+      box-shadow: 0 0 0 3px rgba(28,109,106,.12);
+    }
+
+    .privacy {
+      margin: 9px 0 0;
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.55;
+    }
+
+    .actions {
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: 9px;
+      margin-top: 18px;
+    }
+
+    .button {
+      min-height: 46px;
+      padding: 10px 16px;
+      border: 1px solid var(--line);
+      border-radius: 9px;
+      background: white;
+      color: #35515a;
+      font-size: 14px;
+      font-weight: 900;
+    }
+
+    .button.primary {
+      border-color: var(--teal);
+      background: var(--teal);
+      color: white;
+      box-shadow: 0 10px 24px rgba(28,109,106,.19);
+    }
+
+    .button.primary:hover { background: var(--teal-dark); }
+    .button.secondary:hover { border-color: #b6cbc7; }
+
+    .status {
+      min-height: 24px;
+      margin: 13px 0 0;
+      padding: 10px 11px;
+      border: 1px solid transparent;
+      border-radius: 8px;
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.55;
+    }
+
+    .status.success { border-color: #b9d9d5; background: var(--teal-soft); color: var(--teal-dark); }
+    .status.warning { border-color: #e7bba7; background: var(--orange-soft); color: var(--orange); }
+    .status.error { border-color: #dfaaa0; background: #fff2ef; color: var(--red); }
+
+    .foot {
+      display: flex;
+      justify-content: space-between;
+      gap: 14px;
+      padding: 15px 2px 0;
+      color: var(--muted);
+      font-size: 11px;
+      line-height: 1.5;
+    }
+
+    @media (max-width: 560px) {
+      .head, .body { padding-right: 19px; padding-left: 19px; }
+      .actions { grid-template-columns: 1fr; }
+      .button.secondary { order: 2; }
+      .foot { flex-direction: column; gap: 3px; }
+    }
+  </style>
+</head>
+<body>
+  <main class="shell">
+    <a class="back" href="./">← 返回原转换器</a>
+    <section class="card">
+      <header class="head">
+        <p class="eyebrow">One-click exporter</p>
+        <h1>越接码下载sub2文件</h1>
+        <p class="lead">粘贴一个 ChatGPT accessToken，点击按钮，立即下载可导入的 sub2api JSON 文件。</p>
+      </header>
+      <div class="body">
+        <label for="tokenInput">ChatGPT accessToken</label>
+        <textarea id="tokenInput" spellcheck="false" autocomplete="off" placeholder="eyJhbGciOi...&#10;&#10;也支持 Bearer eyJhbGciOi..."></textarea>
+        <p class="privacy">全部处理都在当前浏览器完成，不上传、不保存。只有 AT 时，token 到期后需要重新生成文件。</p>
+        <div class="actions">
+          <button class="button primary" id="downloadButton" type="button">下载sub2文件</button>
+          <button class="button secondary" id="clearButton" type="button">清空</button>
+        </div>
+        <p class="status" id="status" aria-live="polite">等待粘贴 AT。</p>
+      </div>
+    </section>
+    <footer class="foot">
+      <span>输出：sub2api OAuth JSON</span>
+      <span>独立入口，不影响原转换器</span>
+    </footer>
+  </main>
+
+  <script>
+    (() => {
+      "use strict";
+
+      const tokenInput = document.querySelector("#tokenInput");
+      const downloadButton = document.querySelector("#downloadButton");
+      const clearButton = document.querySelector("#clearButton");
+      const status = document.querySelector("#status");
+
+      function setStatus(message, kind = "") {
+        status.textContent = message;
+        status.className = `status${kind ? ` ${kind}` : ""}`;
+      }
+
+      function decodeBase64Url(value) {
+        const normalized = value.replace(/-/g, "+").replace(/_/g, "/");
+        const padded = normalized.padEnd(Math.ceil(normalized.length / 4) * 4, "=");
+        const binary = atob(padded);
+        const bytes = Uint8Array.from(binary, (char) => char.charCodeAt(0));
+        return new TextDecoder().decode(bytes);
+      }
+
+      function bytesToBase64Url(bytes) {
+        let binary = "";
+        for (let index = 0; index < bytes.length; index += 0x8000) binary += String.fromCharCode(...bytes.subarray(index, index + 0x8000));
+        return btoa(binary).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/g, "");
+      }
+
+      function encodeJson(value) {
+        return bytesToBase64Url(new TextEncoder().encode(JSON.stringify(value)));
+      }
+
+      function parseToken(raw) {
+        const token = raw.trim().replace(/^Bearer\s+/i, "").trim();
+        if (!token || /\s/.test(token)) throw new Error("请只粘贴一个完整的 AT");
+        const segments = token.split(".");
+        if (segments.length !== 3) throw new Error("AT 不是有效的 JWT 格式");
+        try {
+          const payload = JSON.parse(decodeBase64Url(segments[1]));
+          if (!payload || typeof payload !== "object" || Array.isArray(payload)) throw new Error();
+          return { token, payload };
+        } catch {
+          throw new Error("AT 内容解析失败");
+        }
+      }
+
+      function firstText(...values) {
+        return values.find((value) => typeof value === "string" && value.trim())?.trim();
+      }
+
+      function stripEmpty(value) {
+        if (Array.isArray(value)) return value.map(stripEmpty).filter((item) => item !== undefined);
+        if (value && typeof value === "object") {
+          const entries = Object.entries(value)
+            .map(([key, item]) => [key, stripEmpty(item)])
+            .filter(([, item]) => item !== undefined);
+          return entries.length ? Object.fromEntries(entries) : undefined;
+        }
+        return value === undefined || value === null || value === "" ? undefined : value;
+      }
+
+      function makeIdToken({ accountId, userId, email, planType, expires }) {
+        const now = Math.trunc(Date.now() / 1000);
+        const auth = { chatgpt_account_id: accountId };
+        if (userId) {
+          auth.chatgpt_user_id = userId;
+          auth.user_id = userId;
+        }
+        if (planType) auth.chatgpt_plan_type = planType;
+        const payload = { iat: now, exp: expires, "https://api.openai.com/auth": auth };
+        if (email) payload.email = email;
+        return `${encodeJson({ alg: "none", typ: "JWT", cpa_synthetic: true })}.${encodeJson(payload)}.synthetic`;
+      }
+
+      function buildSub2Document(raw) {
+        const { token, payload } = parseToken(raw);
+        const auth = payload["https://api.openai.com/auth"] || {};
+        const profile = payload["https://api.openai.com/profile"] || {};
+        const accountId = firstText(auth.chatgpt_account_id);
+        const userId = firstText(auth.chatgpt_user_id, auth.user_id);
+        const email = firstText(profile.email, payload.email);
+        const planType = firstText(auth.chatgpt_plan_type) || "free";
+        const expires = Math.trunc(Number(payload.exp));
+
+        if (!accountId) throw new Error("AT 缺少 chatgpt_account_id");
+        if (!Number.isFinite(expires) || expires <= 0) throw new Error("AT 缺少有效过期时间");
+        const nowSeconds = Math.trunc(Date.now() / 1000);
+        if (expires <= nowSeconds) throw new Error("AT 已经过期，请换一个新的 AT");
+
+        const exportedAt = new Date().toISOString();
+        const expiresAt = new Date(expires * 1000).toISOString();
+        const name = email || accountId;
+        const emailKey = email ? email.toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_+|_+$/g, "") : undefined;
+        const idToken = makeIdToken({ accountId, userId, email, planType, expires });
+        const account = stripEmpty({
+          name,
+          platform: "openai",
+          type: "oauth",
+          expires_at: expires,
+          auto_pause_on_expired: true,
+          concurrency: 10,
+          priority: 1,
+          credentials: {
+            access_token: token,
+            id_token: idToken,
+            chatgpt_account_id: accountId,
+            chatgpt_user_id: userId,
+            email,
+            expires_at: expiresAt,
+            expires_in: expires - nowSeconds,
+            plan_type: planType,
+          },
+          extra: {
+            email,
+            email_key: emailKey,
+            name,
+            source: "raw_access_token",
+            last_refresh: exportedAt,
+          },
+        });
+
+        return {
+          filename: `sub2api-${(email || accountId).replace(/[^a-zA-Z0-9._-]+/g, "_")}.json`,
+          email,
+          accountId,
+          planType,
+          document: { exported_at: exportedAt, proxies: [], accounts: [account] },
+        };
+      }
+
+      function downloadSub2() {
+        try {
+          const result = buildSub2Document(tokenInput.value);
+          const blob = new Blob([JSON.stringify(result.document, null, 2)], { type: "application/json;charset=utf-8" });
+          const url = URL.createObjectURL(blob);
+          const link = document.createElement("a");
+          link.href = url;
+          link.download = result.filename;
+          document.body.appendChild(link);
+          link.click();
+          link.remove();
+          setTimeout(() => URL.revokeObjectURL(url), 1000);
+          setStatus(`已生成并下载：${result.email || result.accountId} · ${result.planType}`, "success");
+        } catch (error) {
+          setStatus(error.message, "error");
+        }
+      }
+
+      function clearAll() {
+        tokenInput.value = "";
+        setStatus("等待粘贴 AT。");
+        tokenInput.focus();
+      }
+
+      downloadButton.addEventListener("click", downloadSub2);
+      clearButton.addEventListener("click", clearAll);
+    })();
+  </script>
+</body>
+</html>
