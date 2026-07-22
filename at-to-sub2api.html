@@ -5,7 +5,7 @@
   <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; connect-src https://api.cuixiaoxuan.com http://127.0.0.1:8787; object-src 'none'; base-uri 'none'; form-action 'none'">
   <meta name="referrer" content="no-referrer">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="description" content="粘贴 ChatGPT accessToken 或完整 session JSON，注册 Agent Identity 并下载 sub2api 可导入的 auth.json。">
+  <meta name="description" content="粘贴 ChatGPT accessToken 或完整 session JSON，注册 Agent Identity 并下载可直接导入 sub2api 的数据文件。">
   <meta name="agent-api-url" content="https://api.cuixiaoxuan.com/api/agent/register">
   <title>越接码下载sub2文件</title>
   <style>
@@ -197,21 +197,21 @@
       <header class="head">
         <p class="eyebrow">One-click exporter</p>
         <h1>越接码下载sub2文件</h1>
-        <p class="lead">粘贴 ChatGPT accessToken 或完整 session JSON，生成 Ed25519 密钥并注册 Agent Runtime，下载 sub2api 可导入的 Agent Identity 文件。</p>
+        <p class="lead">粘贴 ChatGPT accessToken 或完整 session JSON，生成 Ed25519 密钥并注册 Agent Runtime，下载可在 sub2api“数据导入”中直接上传的文件。</p>
       </header>
       <div class="body">
         <label for="tokenInput">ChatGPT accessToken / session JSON</label>
         <textarea id="tokenInput" spellcheck="false" autocomplete="off" placeholder="eyJhbGciOi...&#10;&#10;也支持 Bearer eyJ... 或包含 accessToken、user、account 的完整 JSON"></textarea>
-        <p class="privacy">私钥只在当前浏览器生成并写入下载文件；AT 与公钥会发送到本站注册服务，用于向 OpenAI 注册 Runtime，服务端不保存凭据。</p>
+        <p class="privacy">私钥只在当前浏览器生成并写入下载文件；AT 与公钥会发送到本站注册服务，用于向 OpenAI 注册 Runtime，服务端不保存凭据。导入端需使用支持 Agent Identity 的最新版 sub2api。</p>
         <div class="actions">
-          <button class="button primary" id="downloadButton" type="button">注册并下载 Agent Identity</button>
+          <button class="button primary" id="downloadButton" type="button">注册并下载 sub2 文件</button>
           <button class="button secondary" id="clearButton" type="button">清空</button>
         </div>
         <p class="status" id="status" aria-live="polite">等待粘贴 AT 或 session JSON。</p>
       </div>
     </section>
     <footer class="foot">
-      <span>输出：Agent Identity auth.json</span>
+      <span>输出：sub2api-data · Agent Identity</span>
       <span>独立入口，不影响原转换器</span>
     </footer>
   </main>
@@ -368,17 +368,36 @@
         return runtimeID;
       }
 
-      function buildAgentIdentityDocument(runtimeID, privateKeyBase64, info) {
-        const identity = {
-          agent_runtime_id: runtimeID,
-          agent_private_key: privateKeyBase64,
-          account_id: info.accountId,
-          chatgpt_user_id: info.userId || "",
-          email: info.email || "",
-          plan_type: info.planType,
-          chatgpt_account_is_fedramp: info.fedramp,
+      function buildSub2DataDocument(runtimeID, privateKeyBase64, info) {
+        const email = info.email || "";
+        return {
+          type: "sub2api-data",
+          version: 1,
+          exported_at: new Date().toISOString(),
+          proxies: [],
+          accounts: [{
+            name: email || info.accountId,
+            platform: "openai",
+            type: "oauth",
+            credentials: {
+              auth_mode: "agentIdentity",
+              agent_runtime_id: runtimeID,
+              agent_private_key: privateKeyBase64,
+              chatgpt_account_id: info.accountId,
+              chatgpt_user_id: info.userId || "",
+              email,
+              plan_type: info.planType,
+              chatgpt_account_is_fedramp: info.fedramp,
+            },
+            extra: {
+              email,
+              source: "agent_identity",
+            },
+            concurrency: 10,
+            priority: 1,
+            auto_pause_on_expired: false,
+          }],
         };
-        return { auth_mode: "agentIdentity", agent_identity: identity };
       }
 
       function downloadDocument(documentValue, filename) {
@@ -403,10 +422,10 @@
           const info = accountInfo(payload, record);
           const keyMaterial = await generateKeyMaterial();
           const runtimeID = await registerRuntime(token, keyMaterial.publicKeySSH);
-          const authDocument = buildAgentIdentityDocument(runtimeID, keyMaterial.privateKeyBase64, info);
+          const sub2Document = buildSub2DataDocument(runtimeID, keyMaterial.privateKeyBase64, info);
           const safeName = (info.email || info.accountId).replace(/[^a-zA-Z0-9._-]+/g, "_");
-          downloadDocument(authDocument, `sub2-agent-identity-${safeName}.json`);
-          setStatus(`Agent Identity 已注册并下载：${info.email || info.accountId} · ${info.planType}`, "success");
+          downloadDocument(sub2Document, `sub2-agent-identity-${safeName}.json`);
+          setStatus(`sub2 Agent Identity 文件已下载：${info.email || info.accountId} · ${info.planType}`, "success");
         } catch (error) {
           setStatus(error.message, "error");
         } finally {

@@ -118,21 +118,28 @@ async function testSingleTokenProducesImportFile() {
   const downloadedBlob = page.getDownloadedBlob();
   assert.ok(downloadedBlob, page.elements.get("#status").textContent);
   const result = JSON.parse(await downloadedBlob.text());
-  assert.equal(result.auth_mode, "agentIdentity");
-  assert.equal(result.agent_identity.agent_runtime_id, "runtime-browser-fixture");
-  assert.equal(result.agent_identity.account_id, "account-one");
-  assert.equal(result.agent_identity.chatgpt_user_id, "user-account-one");
-  assert.equal(result.agent_identity.email, "one@example.com");
-  assert.equal(result.agent_identity.plan_type, "plus");
-  assert.equal("access_token" in result.agent_identity, false);
-  const privateKey = createPrivateKey({ key: Buffer.from(result.agent_identity.agent_private_key, "base64"), format: "der", type: "pkcs8" });
+  assert.equal(result.type, "sub2api-data");
+  assert.equal(result.version, 1);
+  assert.deepEqual(result.proxies, []);
+  assert.equal(result.accounts.length, 1);
+  const account = result.accounts[0];
+  assert.equal(account.platform, "openai");
+  assert.equal(account.type, "oauth");
+  assert.equal(account.credentials.auth_mode, "agentIdentity");
+  assert.equal(account.credentials.agent_runtime_id, "runtime-browser-fixture");
+  assert.equal(account.credentials.chatgpt_account_id, "account-one");
+  assert.equal(account.credentials.chatgpt_user_id, "user-account-one");
+  assert.equal(account.credentials.email, "one@example.com");
+  assert.equal(account.credentials.plan_type, "plus");
+  assert.equal("access_token" in account.credentials, false);
+  const privateKey = createPrivateKey({ key: Buffer.from(account.credentials.agent_private_key, "base64"), format: "der", type: "pkcs8" });
   assert.equal(privateKey.asymmetricKeyType, "ed25519");
   const request = page.getRegistrationRequest();
   assert.equal(request.url, "https://api.cuixiaoxuan.com/api/agent/register");
   assert.equal(request.body.access_token, token);
   assert.match(request.body.agent_public_key, /^ssh-ed25519 /);
   assert.equal(page.getDownloadedLink().download, "sub2-agent-identity-one_example.com.json");
-  assert.match(page.elements.get("#status").textContent, /Agent Identity 已注册并下载/);
+  assert.match(page.elements.get("#status").textContent, /sub2 Agent Identity/);
   assert.match(page.elements.get("#status").className, /success/);
 }
 
@@ -142,7 +149,7 @@ async function testBearerTokenIsAccepted() {
   await generate(page, `Bearer ${token}`);
 
   const result = JSON.parse(await page.getDownloadedBlob().text());
-  assert.equal(result.agent_identity.plan_type, "team");
+  assert.equal(result.accounts[0].credentials.plan_type, "team");
   assert.equal(page.getRegistrationRequest().body.access_token, token);
 }
 
@@ -161,12 +168,12 @@ async function testCompleteSessionJsonIsAccepted() {
   await generate(page, JSON.stringify(session, null, 2));
 
   const result = JSON.parse(await page.getDownloadedBlob().text());
-  assert.equal(result.agent_identity.account_id, "account-session");
-  assert.equal(result.agent_identity.chatgpt_user_id, "user-session");
-  assert.equal(result.agent_identity.email, "session@example.com");
-  assert.equal(result.agent_identity.plan_type, "pro");
+  assert.equal(result.accounts[0].credentials.chatgpt_account_id, "account-session");
+  assert.equal(result.accounts[0].credentials.chatgpt_user_id, "user-session");
+  assert.equal(result.accounts[0].credentials.email, "session@example.com");
+  assert.equal(result.accounts[0].credentials.plan_type, "pro");
   assert.equal(page.getRegistrationRequest().body.access_token, token);
-  assert.match(page.elements.get("#status").textContent, /Agent Identity 已注册并下载/);
+  assert.match(page.elements.get("#status").textContent, /sub2 Agent Identity/);
 }
 
 async function testInvalidTokenDoesNotEnableDownload() {
@@ -185,7 +192,7 @@ function testStandaloneEntryIsLinkedFromMainPage() {
   assert.match(mainHtml, />越接码下载sub2文件<\/a>/);
   assert.match(page.html, /<h1>越接码下载sub2文件<\/h1>/);
   assert.match(page.html, /私钥只在当前浏览器生成/);
-  assert.match(page.html, /Agent Identity auth\.json/);
+  assert.match(page.html, /sub2api-data/);
 }
 
 async function main() {
