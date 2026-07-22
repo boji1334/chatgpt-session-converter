@@ -4,6 +4,7 @@ const assert = require("node:assert/strict");
 const fs = require("node:fs");
 const path = require("node:path");
 const vm = require("node:vm");
+const { createPrivateKey, webcrypto } = require("node:crypto");
 
 function createFakeElement() {
   return {
@@ -33,6 +34,7 @@ function loadPage() {
   body.appendChild = () => {};
   let downloadedBlob;
   let downloadedLink;
+  let registrationRequest;
   const document = {
     body,
     createElement() {
@@ -40,7 +42,11 @@ function loadPage() {
       return downloadedLink;
     },
     querySelector(selector) {
-      if (!elements.has(selector)) elements.set(selector, createFakeElement());
+      if (!elements.has(selector)) {
+        const element = createFakeElement();
+        if (selector === 'meta[name="agent-api-url"]') element.content = "https://api.cuixiaoxuan.com/api/agent/register";
+        elements.set(selector, element);
+      }
       return elements.get(selector);
     },
   };
@@ -49,6 +55,15 @@ function loadPage() {
     Date,
     TextDecoder,
     TextEncoder,
+    crypto: webcrypto,
+    fetch: async (url, options) => {
+      registrationRequest = { url, options, body: JSON.parse(options.body) };
+      return {
+        ok: true,
+        status: 200,
+        async json() { return { ok: true, agent_runtime_id: "runtime-browser-fixture" }; },
+      };
+    },
     URL: { createObjectURL(blob) { downloadedBlob = blob; return "blob:test"; }, revokeObjectURL() {} },
     atob,
     btoa,
@@ -62,6 +77,7 @@ function loadPage() {
     html,
     getDownloadedBlob() { return downloadedBlob; },
     getDownloadedLink() { return downloadedLink; },
+    getRegistrationRequest() { return registrationRequest; },
   };
 }
 
@@ -89,39 +105,45 @@ function tokenWithPayload(payload) {
   return jwt(payload);
 }
 
-function generate(page, raw) {
+async function generate(page, raw) {
   page.elements.get("#tokenInput").value = raw;
-  page.elements.get("#downloadButton").click();
+  await page.elements.get("#downloadButton").click();
 }
 
 async function testSingleTokenProducesImportFile() {
   const page = loadPage();
   const token = accessToken("account-one", "one@example.com");
-  generate(page, token);
+  await generate(page, token);
 
-  const result = JSON.parse(await page.getDownloadedBlob().text());
-  assert.equal(result.accounts.length, 1);
-  assert.equal(result.accounts[0].platform, "openai");
-  assert.equal(result.accounts[0].type, "oauth");
-  assert.equal(result.accounts[0].credentials.access_token, token);
-  assert.equal(result.accounts[0].credentials.chatgpt_account_id, "account-one");
-  assert.equal(result.accounts[0].credentials.chatgpt_user_id, "user-account-one");
-  assert.equal(result.accounts[0].credentials.email, "one@example.com");
-  assert.match(result.accounts[0].credentials.id_token, /\.synthetic$/);
-  assert.equal(result.accounts[0].auto_pause_on_expired, true);
-  assert.equal(page.getDownloadedLink().download, "sub2api-one_example.com.json");
-  assert.match(page.elements.get("#status").textContent, /已生成并下载/);
+  const downloadedBlob = page.getDownloadedBlob();
+  assert.ok(downloadedBlob, page.elements.get("#status").textContent);
+  const result = JSON.parse(await downloadedBlob.text());
+  assert.equal(result.auth_mode, "agentIdentity");
+  assert.equal(result.agent_identity.agent_runtime_id, "runtime-browser-fixture");
+  assert.equal(result.agent_identity.account_id, "account-one");
+  assert.equal(result.agent_identity.chatgpt_user_id, "user-account-one");
+  assert.equal(result.agent_identity.email, "one@example.com");
+  assert.equal(result.agent_identity.plan_type, "plus");
+  assert.equal("access_token" in result.agent_identity, false);
+  const privateKey = createPrivateKey({ key: Buffer.from(result.agent_identity.agent_private_key, "base64"), format: "der", type: "pkcs8" });
+  assert.equal(privateKey.asymmetricKeyType, "ed25519");
+  const request = page.getRegistrationRequest();
+  assert.equal(request.url, "https://api.cuixiaoxuan.com/api/agent/register");
+  assert.equal(request.body.access_token, token);
+  assert.match(request.body.agent_public_key, /^ssh-ed25519 /);
+  assert.equal(page.getDownloadedLink().download, "sub2-agent-identity-one_example.com.json");
+  assert.match(page.elements.get("#status").textContent, /Agent Identity 已注册并下载/);
   assert.match(page.elements.get("#status").className, /success/);
 }
 
 async function testBearerTokenIsAccepted() {
   const page = loadPage();
   const token = accessToken("account-bearer", "bearer@example.com", "team");
-  generate(page, `Bearer ${token}`);
+  await generate(page, `Bearer ${token}`);
 
   const result = JSON.parse(await page.getDownloadedBlob().text());
-  assert.equal(result.accounts[0].credentials.access_token, token);
-  assert.equal(result.accounts[0].credentials.plan_type, "team");
+  assert.equal(result.agent_identity.plan_type, "team");
+  assert.equal(page.getRegistrationRequest().body.access_token, token);
 }
 
 async function testCompleteSessionJsonIsAccepted() {
@@ -136,22 +158,22 @@ async function testCompleteSessionJsonIsAccepted() {
     authProvider: "auth0",
     sessionToken: "session-fixture",
   };
-  generate(page, JSON.stringify(session, null, 2));
+  await generate(page, JSON.stringify(session, null, 2));
 
   const result = JSON.parse(await page.getDownloadedBlob().text());
-  assert.equal(result.accounts.length, 1);
-  assert.equal(result.accounts[0].credentials.access_token, token);
-  assert.equal(result.accounts[0].credentials.chatgpt_account_id, "account-session");
-  assert.equal(result.accounts[0].credentials.chatgpt_user_id, "user-session");
-  assert.equal(result.accounts[0].credentials.email, "session@example.com");
-  assert.equal(result.accounts[0].credentials.plan_type, "pro");
-  assert.match(page.elements.get("#status").textContent, /已生成并下载/);
+  assert.equal(result.agent_identity.account_id, "account-session");
+  assert.equal(result.agent_identity.chatgpt_user_id, "user-session");
+  assert.equal(result.agent_identity.email, "session@example.com");
+  assert.equal(result.agent_identity.plan_type, "pro");
+  assert.equal(page.getRegistrationRequest().body.access_token, token);
+  assert.match(page.elements.get("#status").textContent, /Agent Identity 已注册并下载/);
 }
 
-function testInvalidTokenDoesNotEnableDownload() {
+async function testInvalidTokenDoesNotEnableDownload() {
   const page = loadPage();
-  generate(page, "not-a-jwt");
+  await generate(page, "not-a-jwt");
   assert.equal(page.getDownloadedBlob(), undefined);
+  assert.equal(page.getRegistrationRequest(), undefined);
   assert.match(page.elements.get("#status").textContent, /不是有效的 JWT/);
   assert.match(page.elements.get("#status").className, /error/);
 }
@@ -162,14 +184,15 @@ function testStandaloneEntryIsLinkedFromMainPage() {
   assert.match(mainHtml, /href="\.\/at-to-sub2api\.html"/);
   assert.match(mainHtml, />越接码下载sub2文件<\/a>/);
   assert.match(page.html, /<h1>越接码下载sub2文件<\/h1>/);
-  assert.match(page.html, /不上传、不保存/);
+  assert.match(page.html, /私钥只在当前浏览器生成/);
+  assert.match(page.html, /Agent Identity auth\.json/);
 }
 
 async function main() {
   await testSingleTokenProducesImportFile();
   await testBearerTokenIsAccepted();
   await testCompleteSessionJsonIsAccepted();
-  testInvalidTokenDoesNotEnableDownload();
+  await testInvalidTokenDoesNotEnableDownload();
   testStandaloneEntryIsLinkedFromMainPage();
   console.log("at-to-sub2api tests passed");
 }

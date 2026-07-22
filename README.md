@@ -10,7 +10,7 @@
 
 - 选择或拖入多个 JSON 文件
 - 粘贴单对象、数组、逐行 JSON 或连续 JSON
-- 使用“越接码下载sub2文件”独立入口粘贴 ChatGPT AT 或完整 session JSON，一键下载 sub2api 导入文件
+- 使用“越接码下载sub2文件”独立入口粘贴 ChatGPT AT 或完整 session JSON，注册 Runtime 并下载 Agent Identity auth.json
 - 输出 CPA、sub2api、Cockpit、9router、Codex、AxonHub、Codex-Manager
 - 下载一个合并 JSON
 - 下载每个账号一个 JSON 文件的 ZIP
@@ -21,7 +21,7 @@
 
 ## 安全边界
 
-转换功能不会上传文件，也不写入浏览器存储。实时额度检测开启后，只会把检测所需的账号 token 临时发送到自有检测服务；服务端不保存 token、不返回 token，也不应记录请求体日志。
+常规格式转换不会上传文件，也不写入浏览器存储。实时额度检测会把检测所需的账号 token 临时发送到自有服务。“越接码下载sub2文件”会在浏览器本地生成 Ed25519 私钥，只把 AT 和公钥临时发送到自有服务，再由服务向 OpenAI 注册 Agent Runtime；私钥不会离开浏览器。服务端不保存 token、不返回 token，也不应记录请求体日志。
 
 ## 本地使用
 
@@ -33,7 +33,7 @@
 npm test
 ```
 
-## 额度检测服务
+## 后端服务
 
 复制 `server/.env.example` 为服务端环境配置，设置允许的前端来源，然后启动：
 
@@ -45,8 +45,9 @@ npm run start:quota
 
 - `GET /healthz`
 - `POST /api/quota/check`
+- `POST /api/agent/register`
 
-将 `index.html` 中 `quota-api-url` 的内容设置为部署后的 API 地址，例如 `https://api.example.com/api/quota/check`。没有配置 API 地址时，页面仍可读取导入 JSON 中已有的本地额度快照。
+将 `index.html` 中 `quota-api-url` 和 `at-to-sub2api.html` 中 `agent-api-url` 设置为部署后的 API 地址。额度 API 未配置时，主页面仍可读取导入 JSON 中已有的本地额度快照；Agent Identity 注册接口需要可用的后端服务。
 
 ## GitHub Pages
 

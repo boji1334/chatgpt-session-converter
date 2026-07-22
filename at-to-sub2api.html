@@ -2,10 +2,11 @@
 <html lang="zh-CN">
 <head>
   <meta charset="utf-8">
-  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; object-src 'none'; base-uri 'none'; form-action 'none'">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; connect-src https://api.cuixiaoxuan.com http://127.0.0.1:8787; object-src 'none'; base-uri 'none'; form-action 'none'">
   <meta name="referrer" content="no-referrer">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="description" content="粘贴 ChatGPT accessToken 或完整 session JSON，一键下载 sub2api JSON 文件。">
+  <meta name="description" content="粘贴 ChatGPT accessToken 或完整 session JSON，注册 Agent Identity 并下载 sub2api 可导入的 auth.json。">
+  <meta name="agent-api-url" content="https://api.cuixiaoxuan.com/api/agent/register">
   <title>越接码下载sub2文件</title>
   <style>
     :root {
@@ -196,21 +197,21 @@
       <header class="head">
         <p class="eyebrow">One-click exporter</p>
         <h1>越接码下载sub2文件</h1>
-        <p class="lead">粘贴 ChatGPT accessToken 或完整 session JSON，点击按钮，立即下载可导入的 sub2api JSON 文件。</p>
+        <p class="lead">粘贴 ChatGPT accessToken 或完整 session JSON，生成 Ed25519 密钥并注册 Agent Runtime，下载 sub2api 可导入的 Agent Identity 文件。</p>
       </header>
       <div class="body">
         <label for="tokenInput">ChatGPT accessToken / session JSON</label>
         <textarea id="tokenInput" spellcheck="false" autocomplete="off" placeholder="eyJhbGciOi...&#10;&#10;也支持 Bearer eyJ... 或包含 accessToken、user、account 的完整 JSON"></textarea>
-        <p class="privacy">全部处理都在当前浏览器完成，不上传、不保存。只有 AT 时，token 到期后需要重新生成文件。</p>
+        <p class="privacy">私钥只在当前浏览器生成并写入下载文件；AT 与公钥会发送到本站注册服务，用于向 OpenAI 注册 Runtime，服务端不保存凭据。</p>
         <div class="actions">
-          <button class="button primary" id="downloadButton" type="button">下载sub2文件</button>
+          <button class="button primary" id="downloadButton" type="button">注册并下载 Agent Identity</button>
           <button class="button secondary" id="clearButton" type="button">清空</button>
         </div>
         <p class="status" id="status" aria-live="polite">等待粘贴 AT 或 session JSON。</p>
       </div>
     </section>
     <footer class="foot">
-      <span>输出：sub2api OAuth JSON</span>
+      <span>输出：Agent Identity auth.json</span>
       <span>独立入口，不影响原转换器</span>
     </footer>
   </main>
@@ -219,6 +220,7 @@
     (() => {
       "use strict";
 
+      const agentApiUrl = document.querySelector('meta[name="agent-api-url"]')?.content?.trim() || "";
       const tokenInput = document.querySelector("#tokenInput");
       const downloadButton = document.querySelector("#downloadButton");
       const clearButton = document.querySelector("#clearButton");
@@ -237,14 +239,11 @@
         return new TextDecoder().decode(bytes);
       }
 
-      function bytesToBase64Url(bytes) {
+      function bytesToBase64(bytes) {
         let binary = "";
-        for (let index = 0; index < bytes.length; index += 0x8000) binary += String.fromCharCode(...bytes.subarray(index, index + 0x8000));
-        return btoa(binary).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/g, "");
-      }
-
-      function encodeJson(value) {
-        return bytesToBase64Url(new TextEncoder().encode(JSON.stringify(value)));
+        const view = bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes);
+        for (let index = 0; index < view.length; index += 0x8000) binary += String.fromCharCode(...view.subarray(index, index + 0x8000));
+        return btoa(binary);
       }
 
       function parseToken(raw) {
@@ -298,32 +297,7 @@
         return Number.isFinite(parsed) ? Math.trunc(parsed / 1000) : NaN;
       }
 
-      function stripEmpty(value) {
-        if (Array.isArray(value)) return value.map(stripEmpty).filter((item) => item !== undefined);
-        if (value && typeof value === "object") {
-          const entries = Object.entries(value)
-            .map(([key, item]) => [key, stripEmpty(item)])
-            .filter(([, item]) => item !== undefined);
-          return entries.length ? Object.fromEntries(entries) : undefined;
-        }
-        return value === undefined || value === null || value === "" ? undefined : value;
-      }
-
-      function makeIdToken({ accountId, userId, email, planType, expires }) {
-        const now = Math.trunc(Date.now() / 1000);
-        const auth = { chatgpt_account_id: accountId };
-        if (userId) {
-          auth.chatgpt_user_id = userId;
-          auth.user_id = userId;
-        }
-        if (planType) auth.chatgpt_plan_type = planType;
-        const payload = { iat: now, exp: expires, "https://api.openai.com/auth": auth };
-        if (email) payload.email = email;
-        return `${encodeJson({ alg: "none", typ: "JWT", cpa_synthetic: true })}.${encodeJson(payload)}.synthetic`;
-      }
-
-      function buildSub2Document(raw) {
-        const { token, payload, record } = parseInput(raw);
+      function accountInfo(payload, record) {
         const auth = payload["https://api.openai.com/auth"] || {};
         const profile = payload["https://api.openai.com/profile"] || {};
         const accountId = firstText(
@@ -343,69 +317,101 @@
         );
         const email = firstText(record.user?.email, record.email, record.credentials?.email, profile.email, payload.email);
         const planType = firstText(record.account?.planType, record.account?.plan_type, record.planType, record.plan_type, record.credentials?.plan_type, auth.chatgpt_plan_type) || "free";
-        const expires = expirySeconds(payload, record);
-
+        const fedramp = record.account?.isFedrampCompliantWorkspace === true || record.chatgpt_account_is_fedramp === true;
         if (!accountId) throw new Error("AT 缺少 chatgpt_account_id");
-        if (!Number.isFinite(expires) || expires <= 0) throw new Error("AT 缺少有效过期时间");
-        const nowSeconds = Math.trunc(Date.now() / 1000);
-        if (expires <= nowSeconds) throw new Error("AT 已经过期，请换一个新的 AT");
+        const expires = expirySeconds(payload, record);
+        if (Number.isFinite(expires) && expires <= Math.trunc(Date.now() / 1000)) throw new Error("AT 已经过期，请换一个新的 AT");
+        return { accountId, userId, email, planType, fedramp };
+      }
 
-        const exportedAt = new Date().toISOString();
-        const expiresAt = new Date(expires * 1000).toISOString();
-        const name = email || accountId;
-        const emailKey = email ? email.toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_+|_+$/g, "") : undefined;
-        const idToken = makeIdToken({ accountId, userId, email, planType, expires });
-        const account = stripEmpty({
-          name,
-          platform: "openai",
-          type: "oauth",
-          expires_at: expires,
-          auto_pause_on_expired: true,
-          concurrency: 10,
-          priority: 1,
-          credentials: {
-            access_token: token,
-            id_token: idToken,
-            chatgpt_account_id: accountId,
-            chatgpt_user_id: userId,
-            email,
-            expires_at: expiresAt,
-            expires_in: expires - nowSeconds,
-            plan_type: planType,
-          },
-          extra: {
-            email,
-            email_key: emailKey,
-            name,
-            source: "raw_access_token",
-            last_refresh: exportedAt,
-          },
-        });
+      function sshEd25519PublicKey(rawPublicKey) {
+        const algorithm = new TextEncoder().encode("ssh-ed25519");
+        const raw = rawPublicKey instanceof Uint8Array ? rawPublicKey : new Uint8Array(rawPublicKey);
+        if (raw.length !== 32) throw new Error("浏览器生成的 Ed25519 公钥长度异常");
+        const blob = new Uint8Array(4 + algorithm.length + 4 + raw.length);
+        const view = new DataView(blob.buffer);
+        view.setUint32(0, algorithm.length, false);
+        blob.set(algorithm, 4);
+        view.setUint32(4 + algorithm.length, raw.length, false);
+        blob.set(raw, 8 + algorithm.length);
+        return `ssh-ed25519 ${bytesToBase64(blob)}`;
+      }
 
+      async function generateKeyMaterial() {
+        if (!globalThis.crypto?.subtle) throw new Error("当前浏览器不支持 Web Crypto");
+        let keyPair;
+        try { keyPair = await crypto.subtle.generateKey({ name: "Ed25519" }, true, ["sign", "verify"]); }
+        catch { throw new Error("当前浏览器不支持 Ed25519，请使用最新版 Chrome 或 Edge"); }
+        const [privateDer, publicRaw] = await Promise.all([
+          crypto.subtle.exportKey("pkcs8", keyPair.privateKey),
+          crypto.subtle.exportKey("raw", keyPair.publicKey),
+        ]);
         return {
-          filename: `sub2api-${(email || accountId).replace(/[^a-zA-Z0-9._-]+/g, "_")}.json`,
-          email,
-          accountId,
-          planType,
-          document: { exported_at: exportedAt, proxies: [], accounts: [account] },
+          privateKeyBase64: bytesToBase64(privateDer),
+          publicKeySSH: sshEd25519PublicKey(publicRaw),
         };
       }
 
-      function downloadSub2() {
+      async function registerRuntime(accessToken, publicKeySSH) {
+        if (!agentApiUrl) throw new Error("页面没有配置 Agent 注册服务");
+        const response = await fetch(agentApiUrl, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ access_token: accessToken, agent_public_key: publicKeySSH }),
+        });
+        let payload;
+        try { payload = await response.json(); }
+        catch { payload = {}; }
+        if (!response.ok) throw new Error(payload.error || `Agent Runtime 注册失败（HTTP ${response.status}）`);
+        const runtimeID = firstText(payload.agent_runtime_id, payload.agentRuntimeId);
+        if (!runtimeID) throw new Error("注册服务没有返回 agent_runtime_id");
+        return runtimeID;
+      }
+
+      function buildAgentIdentityDocument(runtimeID, privateKeyBase64, info) {
+        const identity = {
+          agent_runtime_id: runtimeID,
+          agent_private_key: privateKeyBase64,
+          account_id: info.accountId,
+          chatgpt_user_id: info.userId || "",
+          email: info.email || "",
+          plan_type: info.planType,
+          chatgpt_account_is_fedramp: info.fedramp,
+        };
+        return { auth_mode: "agentIdentity", agent_identity: identity };
+      }
+
+      function downloadDocument(documentValue, filename) {
+        const blob = new Blob([JSON.stringify(documentValue, null, 2)], { type: "application/json;charset=utf-8" });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement("a");
+        link.href = url;
+        link.download = filename;
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+        setTimeout(() => URL.revokeObjectURL(url), 1000);
+      }
+
+      async function downloadSub2() {
+        const originalLabel = downloadButton.textContent;
+        downloadButton.disabled = true;
+        downloadButton.textContent = "正在注册 Runtime...";
+        setStatus("正在本地生成 Ed25519 密钥并注册 Agent Runtime...", "warning");
         try {
-          const result = buildSub2Document(tokenInput.value);
-          const blob = new Blob([JSON.stringify(result.document, null, 2)], { type: "application/json;charset=utf-8" });
-          const url = URL.createObjectURL(blob);
-          const link = document.createElement("a");
-          link.href = url;
-          link.download = result.filename;
-          document.body.appendChild(link);
-          link.click();
-          link.remove();
-          setTimeout(() => URL.revokeObjectURL(url), 1000);
-          setStatus(`已生成并下载：${result.email || result.accountId} · ${result.planType}`, "success");
+          const { token, payload, record } = parseInput(tokenInput.value);
+          const info = accountInfo(payload, record);
+          const keyMaterial = await generateKeyMaterial();
+          const runtimeID = await registerRuntime(token, keyMaterial.publicKeySSH);
+          const authDocument = buildAgentIdentityDocument(runtimeID, keyMaterial.privateKeyBase64, info);
+          const safeName = (info.email || info.accountId).replace(/[^a-zA-Z0-9._-]+/g, "_");
+          downloadDocument(authDocument, `sub2-agent-identity-${safeName}.json`);
+          setStatus(`Agent Identity 已注册并下载：${info.email || info.accountId} · ${info.planType}`, "success");
         } catch (error) {
           setStatus(error.message, "error");
+        } finally {
+          downloadButton.disabled = false;
+          downloadButton.textContent = originalLabel;
         }
       }
 
