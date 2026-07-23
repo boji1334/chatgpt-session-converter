@@ -2,6 +2,7 @@ import http from "node:http";
 import path from "node:path";
 import { URL } from "node:url";
 import { fileURLToPath } from "node:url";
+import { DownloadCounter, DOWNLOAD_OUTCOMES, DOWNLOAD_PAGE_IDS } from "./downloads.mjs";
 import { failedQuotaResult, normalizeAccountInput, normalizeQuotaResponse } from "./quota.mjs";
 import { VisitCounter, VISIT_PAGE_IDS } from "./visits.mjs";
 
@@ -21,7 +22,9 @@ const RATE_LIMIT_MAX = Number(process.env.RATE_LIMIT_MAX || 30);
 const rateBuckets = new Map();
 const VISIT_STORE_PATH = process.env.VISIT_STORE_PATH || path.join(path.dirname(fileURLToPath(import.meta.url)), "data", "visits.json");
 const VISIT_TIME_ZONE = process.env.VISIT_TIME_ZONE || "Asia/Shanghai";
+const DOWNLOAD_STORE_PATH = process.env.DOWNLOAD_STORE_PATH || path.join(path.dirname(fileURLToPath(import.meta.url)), "data", "downloads.json");
 const visitCounter = new VisitCounter({ filePath: VISIT_STORE_PATH, timeZone: VISIT_TIME_ZONE });
+const downloadCounter = new DownloadCounter({ filePath: DOWNLOAD_STORE_PATH });
 
 function json(res, status, body, origin) {
   const headers = {
@@ -270,6 +273,55 @@ async function handleVisit(request, response, origin) {
   }
 }
 
+async function handleDownloadRead(request, response, origin, page) {
+  if (!DOWNLOAD_PAGE_IDS.has(page)) {
+    json(response, 400, { ok: false, error: "page 不是有效的下载页面" }, origin);
+    return;
+  }
+
+  try {
+    const stats = await downloadCounter.get(page);
+    json(response, 200, { ok: true, stats }, origin);
+  } catch (error) {
+    console.error("download counter read failed", error);
+    json(response, 500, { ok: false, error: "下载统计读取失败" }, origin);
+  }
+}
+
+async function handleDownloadRecord(request, response, origin) {
+  if (!clientAllowed(request)) {
+    json(response, 429, { ok: false, error: "请求过于频繁，请稍后重试" }, origin);
+    return;
+  }
+
+  let body;
+  try {
+    body = await readBody(request);
+  } catch (error) {
+    json(response, 400, { ok: false, error: error.message }, origin);
+    return;
+  }
+
+  const page = typeof body?.page === "string" ? body.page.trim() : "";
+  const outcome = typeof body?.outcome === "string" ? body.outcome.trim() : "";
+  if (!DOWNLOAD_PAGE_IDS.has(page)) {
+    json(response, 400, { ok: false, error: "page 不是有效的下载页面" }, origin);
+    return;
+  }
+  if (!DOWNLOAD_OUTCOMES.has(outcome)) {
+    json(response, 400, { ok: false, error: "outcome 必须为 success 或 failed" }, origin);
+    return;
+  }
+
+  try {
+    const stats = await downloadCounter.record(page, outcome);
+    json(response, 200, { ok: true, stats }, origin);
+  } catch (error) {
+    console.error("download counter write failed", error);
+    json(response, 500, { ok: false, error: "下载统计写入失败" }, origin);
+  }
+}
+
 const server = http.createServer(async (request, response) => {
   const origin = allowedOrigin(request);
   if (request.headers.origin && !origin) {
@@ -302,6 +354,14 @@ const server = http.createServer(async (request, response) => {
   }
   if (request.method === "POST" && url.pathname === "/api/visits") {
     await handleVisit(request, response, origin);
+    return;
+  }
+  if (request.method === "GET" && url.pathname === "/api/downloads") {
+    await handleDownloadRead(request, response, origin, url.searchParams.get("page") || "");
+    return;
+  }
+  if (request.method === "POST" && url.pathname === "/api/downloads") {
+    await handleDownloadRecord(request, response, origin);
     return;
   }
   json(response, 404, { ok: false, error: "Not found" }, origin);

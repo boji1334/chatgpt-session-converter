@@ -2,11 +2,12 @@
 <html lang="zh-CN">
 <head>
   <meta charset="utf-8">
-  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; connect-src https://api.cuixiaoxuan.com http://127.0.0.1:8788; object-src 'none'; base-uri 'none'; form-action 'none'">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; connect-src https://api.cuixiaoxuan.com http://127.0.0.1:8787 http://127.0.0.1:8788; object-src 'none'; base-uri 'none'; form-action 'none'">
   <meta name="referrer" content="no-referrer">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="description" content="粘贴 ChatGPT accessToken 或完整 session JSON，注册 Agent Identity 并下载 CPA 可导入的 Codex 账号文件。">
   <meta name="agent-api-url" content="https://api.cuixiaoxuan.com/api/agent/register">
+  <meta name="download-api-url" content="https://api.cuixiaoxuan.com/api/downloads">
   <title>越接码下载CPA文件</title>
   <style>
     :root {
@@ -39,86 +40,245 @@
 
     button, textarea { font: inherit; }
     button { cursor: pointer; }
-    .shell { width: min(680px, calc(100% - 28px)); padding: 28px 0; }
+
+    .shell {
+      width: min(680px, calc(100% - 28px));
+      padding: 28px 0;
+    }
+
+    .page-nav { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin: 0 2px 16px; }
+
     .back {
-      display: inline-flex;
-      margin: 0 0 14px 2px;
+      display: inline-block;
       color: var(--teal-dark);
       font-size: 13px;
-      font-weight: 750;
+      font-weight: 800;
       text-decoration: none;
     }
+
+    .back:hover { text-decoration: underline; }
+
+    .github-cta {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      min-height: 44px;
+      padding: 7px 8px 7px 12px;
+      border: 1px solid #c8d7d5;
+      border-radius: 10px;
+      background: rgba(255,255,255,.88);
+      color: var(--ink);
+      text-decoration: none;
+      box-shadow: 0 8px 22px rgba(31,67,69,.08);
+      transition: border-color .18s ease, transform .18s ease, box-shadow .18s ease;
+    }
+
+    .github-cta:hover { border-color: var(--teal); transform: translateY(-1px); box-shadow: 0 10px 25px rgba(31,67,69,.12); }
+    .github-cta:active { transform: translateY(1px); }
+    .github-cta:focus-visible { outline: 3px solid rgba(28,109,106,.2); outline-offset: 2px; }
+    .github-cta-copy { display: grid; gap: 1px; }
+    .github-cta-label { color: var(--muted); font-size: 9px; font-weight: 750; }
+    .github-cta strong { font-size: 12px; line-height: 1.2; white-space: nowrap; }
+    .github-star { display: grid; width: 28px; height: 28px; place-items: center; border-radius: 8px; background: var(--teal); color: white; font-size: 14px; }
+
     .card {
       overflow: hidden;
-      border: 1px solid rgba(28, 109, 106, .22);
-      border-radius: 18px;
-      background: rgba(255,255,255,.91);
-      box-shadow: 0 24px 70px rgba(29, 63, 69, .13);
-      backdrop-filter: blur(15px);
+      border: 1px solid rgba(203,219,216,.96);
+      border-radius: 16px;
+      background: rgba(255,255,255,.92);
+      box-shadow: 0 28px 80px rgba(31,67,69,.13);
     }
-    .head { padding: 30px 34px 24px; border-bottom: 1px solid var(--line); }
+
+    .head {
+      padding: 30px 32px 23px;
+      border-bottom: 1px solid var(--line);
+    }
+
     .eyebrow {
       margin: 0 0 8px;
       color: var(--teal);
       font-size: 11px;
-      font-weight: 850;
-      letter-spacing: .18em;
+      font-weight: 900;
+      letter-spacing: .16em;
       text-transform: uppercase;
     }
-    h1 { margin: 0; font-size: clamp(31px, 6vw, 47px); letter-spacing: -.055em; line-height: .98; }
-    .lead { margin: 13px 0 0; max-width: 570px; color: var(--muted); font-size: 14px; line-height: 1.7; }
-    .body { padding: 26px 34px 30px; }
-    label { display: block; margin-bottom: 9px; font-size: 13px; font-weight: 780; }
+
+    h1 {
+      margin: 0 0 10px;
+      font-size: clamp(32px, 7vw, 48px);
+      line-height: 1.02;
+      letter-spacing: -.04em;
+    }
+
+    .lead {
+      margin: 0;
+      color: var(--muted);
+      font-size: 14px;
+      line-height: 1.65;
+    }
+
+    .body { padding: 25px 32px 30px; }
+
+    label {
+      display: block;
+      margin-bottom: 8px;
+      color: #35515a;
+      font-size: 12px;
+      font-weight: 850;
+    }
+
     textarea {
       width: 100%;
-      min-height: 210px;
+      min-height: 190px;
+      padding: 14px;
       resize: vertical;
       border: 1px solid var(--line);
-      border-radius: 12px;
-      padding: 14px 15px;
-      outline: none;
-      color: #163137;
-      background: #fbfdfc;
-      font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
-      font-size: 12px;
-      line-height: 1.55;
-      transition: border-color .16s ease, box-shadow .16s ease;
-    }
-    textarea:focus { border-color: var(--teal); box-shadow: 0 0 0 4px rgba(28, 109, 106, .1); }
-    .privacy { margin: 11px 0 0; color: var(--muted); font-size: 12px; line-height: 1.65; }
-    .actions { display: grid; grid-template-columns: 1fr auto; gap: 10px; margin-top: 18px; }
-    .button { border-radius: 11px; padding: 12px 17px; border: 1px solid transparent; font-weight: 800; }
-    .button:disabled { cursor: not-allowed; opacity: .55; }
-    .primary { color: white; background: var(--teal-dark); }
-    .primary:hover { background: var(--teal); }
-    .secondary { border-color: var(--line); color: var(--ink); background: white; }
-    .status {
-      min-height: 44px;
-      margin: 12px 0 0;
-      padding: 12px 13px;
-      border: 1px solid var(--line);
       border-radius: 10px;
+      outline: none;
+      background: #fbfdfd;
+      color: var(--ink);
+      font-family: ui-monospace, SFMono-Regular, Consolas, "Liberation Mono", monospace;
+      font-size: 12px;
+      line-height: 1.6;
+    }
+
+    textarea:focus {
+      border-color: var(--teal);
+      box-shadow: 0 0 0 3px rgba(28,109,106,.12);
+    }
+
+    .privacy {
+      margin: 9px 0 0;
       color: var(--muted);
-      background: #f7faf9;
       font-size: 12px;
       line-height: 1.55;
     }
-    .status.success { border-color: #a9d7cf; color: var(--teal-dark); background: var(--teal-soft); }
-    .status.warning { border-color: #e7c5b1; color: var(--orange); background: var(--orange-soft); }
-    .status.error { border-color: #e8b7a8; color: var(--red); background: #fff3ef; }
-    .foot { display: flex; justify-content: space-between; gap: 16px; padding: 15px 3px 0; color: var(--muted); font-size: 11px; }
+
+    .actions {
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: 9px;
+      margin-top: 18px;
+    }
+
+    .button {
+      min-height: 46px;
+      padding: 10px 16px;
+      border: 1px solid var(--line);
+      border-radius: 9px;
+      background: white;
+      color: #35515a;
+      font-size: 14px;
+      font-weight: 900;
+    }
+
+    .button:disabled { cursor: not-allowed; opacity: .55; }
+
+    .button.primary {
+      border-color: var(--teal);
+      background: var(--teal);
+      color: white;
+      box-shadow: 0 10px 24px rgba(28,109,106,.19);
+    }
+
+    .button.primary:hover { background: var(--teal-dark); }
+    .button.secondary:hover { border-color: #b6cbc7; }
+
+    .status {
+      min-height: 24px;
+      margin: 13px 0 0;
+      padding: 10px 11px;
+      border: 1px solid transparent;
+      border-radius: 8px;
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.55;
+    }
+
+    .status.success { border-color: #b9d9d5; background: var(--teal-soft); color: var(--teal-dark); }
+    .status.warning { border-color: #e7bba7; background: var(--orange-soft); color: var(--orange); }
+    .status.error { border-color: #dfaaa0; background: #fff2ef; color: var(--red); }
+
+    .foot {
+      display: flex;
+      justify-content: space-between;
+      gap: 14px;
+      padding: 15px 2px 0;
+      color: var(--muted);
+      font-size: 11px;
+      line-height: 1.5;
+    }
+
     .foot a { color: var(--teal-dark); font-weight: 750; text-decoration: none; }
 
+    .download-widget {
+      position: fixed;
+      right: 18px;
+      bottom: 18px;
+      z-index: 20;
+      width: 252px;
+      padding: 13px;
+      border: 1px solid #cadbd8;
+      border-radius: 10px;
+      background: rgba(255,255,255,.94);
+      box-shadow: 0 16px 38px rgba(31,67,69,.14);
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+    }
+
+    .download-widget-title { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 10px; color: #31545a; font-size: 12px; font-weight: 850; }
+    .download-widget-title small { color: #829095; font-size: 9px; font-weight: 700; letter-spacing: .05em; text-transform: uppercase; }
+    .download-stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 7px; }
+    .download-stat {
+      min-width: 0;
+      padding: 8px 5px 7px;
+      border: 1px solid #dbe6e4;
+      border-radius: 8px;
+      background: #f8fbfa;
+      text-align: center;
+    }
+    .download-symbol {
+      display: grid;
+      width: 22px;
+      height: 22px;
+      margin: 0 auto 5px;
+      place-items: center;
+      border-radius: 7px;
+      background: #e7f0ef;
+      color: #426166;
+      font-size: 12px;
+      font-weight: 950;
+      line-height: 1;
+    }
+    .download-stat.success .download-symbol { background: #dff1e9; color: #237b5e; }
+    .download-stat.failed .download-symbol { background: #fff0e8; color: #a85b32; }
+    .download-value { display: block; color: #203d43; font-size: 16px; font-variant-numeric: tabular-nums; line-height: 1.1; }
+    .download-label { display: block; margin-top: 3px; color: #78878b; font-size: 9px; font-weight: 750; }
+    .download-widget[aria-busy="true"] .download-value { color: #98a5a8; }
+    .download-error { margin: 0; color: #8d5a35; font-size: 11px; line-height: 1.45; }
+    .download-error[hidden], .download-stats[hidden] { display: none; }
+
     @media (max-width: 560px) {
+      body { display: block; }
+      .shell { margin: 0 auto; }
+      .page-nav { align-items: flex-start; flex-direction: column; }
       .head, .body { padding-left: 20px; padding-right: 20px; }
       .actions { grid-template-columns: 1fr; }
-      .foot { align-items: flex-start; flex-direction: column; gap: 6px; }
+      .button.secondary { order: 2; }
+      .foot { flex-direction: column; gap: 3px; }
+      .download-widget { position: static; width: min(680px, calc(100% - 28px)); margin: 0 auto 16px; }
     }
   </style>
 </head>
 <body>
   <main class="shell">
-    <a class="back" href="./">← 返回原转换器</a>
+    <div class="page-nav">
+      <a class="back" href="./">← 返回原转换器</a>
+      <a class="github-cta" href="https://github.com/boji1334/chatgpt-session-converter" target="_blank" rel="noopener noreferrer" aria-label="在 GitHub 打开项目并点 Star">
+        <span class="github-cta-copy"><span class="github-cta-label">GitHub 开源项目</span><strong>喜欢的话，求个 Star</strong></span>
+        <span class="github-star" aria-hidden="true">★</span>
+      </a>
+    </div>
     <section class="card">
       <header class="head">
         <p class="eyebrow">Agent Identity exporter</p>
@@ -142,19 +302,97 @@
     </footer>
   </main>
 
+  <aside class="download-widget" id="downloadWidget" aria-label="下载记录" aria-live="polite" aria-busy="true">
+    <div class="download-widget-title"><span>下载记录</span><small>CPA</small></div>
+    <div class="download-stats" id="downloadStats">
+      <div class="download-stat total" title="全部下载结果">
+        <span class="download-symbol" aria-hidden="true">Σ</span>
+        <strong class="download-value" id="downloadTotal">...</strong>
+        <span class="download-label">全部</span>
+      </div>
+      <div class="download-stat success" title="成功下载">
+        <span class="download-symbol" aria-hidden="true">✓</span>
+        <strong class="download-value" id="downloadSuccess">...</strong>
+        <span class="download-label">成功</span>
+      </div>
+      <div class="download-stat failed" title="下载失败">
+        <span class="download-symbol" aria-hidden="true">×</span>
+        <strong class="download-value" id="downloadFailed">...</strong>
+        <span class="download-label">失败</span>
+      </div>
+    </div>
+    <p class="download-error" id="downloadError" hidden>下载统计暂未连接</p>
+  </aside>
+
   <script>
     (() => {
       "use strict";
 
       const agentApiUrl = document.querySelector('meta[name="agent-api-url"]')?.content?.trim() || "";
+      const downloadMetaUrl = document.querySelector('meta[name="download-api-url"]')?.content?.trim() || "";
+      const downloadApiUrl = ["localhost", "127.0.0.1"].includes(globalThis.location?.hostname) ? "http://127.0.0.1:8787/api/downloads" : downloadMetaUrl;
+      const downloadPage = "at-to-cpa";
       const tokenInput = document.querySelector("#tokenInput");
       const downloadButton = document.querySelector("#downloadButton");
       const clearButton = document.querySelector("#clearButton");
       const status = document.querySelector("#status");
+      const downloadWidget = document.querySelector("#downloadWidget");
+      const downloadStats = document.querySelector("#downloadStats");
+      const downloadError = document.querySelector("#downloadError");
+      const downloadTotal = document.querySelector("#downloadTotal");
+      const downloadSuccess = document.querySelector("#downloadSuccess");
+      const downloadFailed = document.querySelector("#downloadFailed");
 
       function setStatus(message, kind = "") {
         status.textContent = message;
         status.className = `status${kind ? ` ${kind}` : ""}`;
+      }
+
+      function renderDownloadStats(stats) {
+        const format = new Intl.NumberFormat("zh-CN");
+        downloadTotal.textContent = format.format(stats.total);
+        downloadSuccess.textContent = format.format(stats.success);
+        downloadFailed.textContent = format.format(stats.failed);
+        downloadStats.hidden = false;
+        downloadError.hidden = true;
+        downloadWidget.classList.remove("error");
+        downloadWidget.setAttribute("aria-busy", "false");
+      }
+
+      function showDownloadStatsError() {
+        if (!downloadWidget) return;
+        downloadWidget.classList.add("error");
+        downloadWidget.setAttribute("aria-busy", "false");
+        downloadStats.hidden = true;
+        downloadError.hidden = false;
+      }
+
+      async function loadDownloadStats() {
+        if (!downloadApiUrl || typeof fetch !== "function" || !downloadWidget) return;
+        try {
+          const response = await fetch(`${downloadApiUrl}?page=${encodeURIComponent(downloadPage)}`);
+          const payload = await response.json();
+          if (!response.ok || !payload?.ok || !payload.stats) throw new Error("download stats request failed");
+          renderDownloadStats(payload.stats);
+        } catch {
+          showDownloadStatsError();
+        }
+      }
+
+      async function recordDownloadOutcome(outcome) {
+        if (!downloadApiUrl || typeof fetch !== "function" || !downloadWidget) return;
+        try {
+          const response = await fetch(downloadApiUrl, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ page: downloadPage, outcome }),
+          });
+          const payload = await response.json();
+          if (!response.ok || !payload?.ok || !payload.stats) throw new Error("download record request failed");
+          renderDownloadStats(payload.stats);
+        } catch {
+          showDownloadStatsError();
+        }
       }
 
       function decodeBase64Url(value) {
@@ -319,8 +557,10 @@
           const safeName = (info.email || info.accountId).replace(/[^a-zA-Z0-9._-]+/g, "_");
           downloadDocument(cpaDocument, `codex-agent-identity-${safeName}.json`);
           setStatus(`CPA Agent Identity 文件已下载：${info.email || info.accountId} · ${info.planType}`, "success");
+          await recordDownloadOutcome("success");
         } catch (error) {
           setStatus(error.message, "error");
+          await recordDownloadOutcome("failed");
         } finally {
           downloadButton.disabled = false;
           downloadButton.textContent = originalLabel;
@@ -335,6 +575,7 @@
 
       downloadButton.addEventListener("click", downloadCpa);
       clearButton.addEventListener("click", clearAll);
+      loadDownloadStats();
     })();
   </script>
 </body>

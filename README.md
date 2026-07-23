@@ -14,6 +14,7 @@
 - 粘贴单对象、数组、逐行 JSON 或连续 JSON
 - 使用“越接码下载sub2文件”独立入口粘贴 ChatGPT AT 或完整 session JSON，注册 Runtime 并下载可在 sub2api“数据导入”中直接上传的 Agent Identity 数据文件
 - 使用“越接码下载CPA文件”独立入口粘贴 ChatGPT AT 或完整 session JSON，注册 Agent Runtime 并下载本站适配版 CLIProxyAPI 可直接导入的 Codex Agent Identity auth JSON
+- 两个独立下载入口分别显示服务端累计的全部、成功和失败下载次数
 - 输出 CPA、sub2api、Cockpit、9router、Codex、AxonHub、Codex-Manager
 - 下载一个合并 JSON
 - 下载每个账号一个 JSON 文件的 ZIP
@@ -51,10 +52,12 @@ npm run start:agent
 - `GET /healthz`
 - `POST /api/quota/check`
 - `POST /api/agent/register`
+- `GET /api/downloads?page=at-to-sub2api|at-to-cpa`
+- `POST /api/downloads`
 
 Agent 注册接口由 `server/agent_backend.py` 提供，注册请求逻辑直接按 `codex_agent(2).py` 移植，使用 `curl_cffi` 的 Chrome impersonation。浏览器只提交 AT 与 Ed25519 公钥，私钥不会发送到后端。
 
-将 `index.html` 中 `quota-api-url` 和 `at-to-sub2api.html` 中 `agent-api-url` 设置为部署后的 API 地址。额度 API 未配置时，主页面仍可读取导入 JSON 中已有的本地额度快照；Agent Identity 注册接口需要可用的后端服务。
+将 `index.html` 中 `quota-api-url`、两个下载页中的 `agent-api-url` 和 `download-api-url` 设置为部署后的 API 地址。额度 API 未配置时，主页面仍可读取导入 JSON 中已有的本地额度快照；Agent Identity 注册和下载统计需要可用的后端服务。
 
 ## GitHub Pages
 

@@ -7,19 +7,28 @@ const vm = require("node:vm");
 const { createPrivateKey, webcrypto } = require("node:crypto");
 
 function createFakeElement() {
+  const classes = new Set();
   return {
     className: "",
     disabled: false,
     href: "",
     download: "",
+    hidden: false,
     listeners: {},
     textContent: "",
     value: "",
+    attributes: {},
+    classList: {
+      add(...values) { values.forEach((value) => classes.add(value)); },
+      remove(...values) { values.forEach((value) => classes.delete(value)); },
+      contains(value) { return classes.has(value); },
+    },
     addEventListener(type, handler) { this.listeners[type] = handler; },
     click() { return this.listeners.click?.({ target: this, preventDefault() {} }); },
     focus() {},
     remove() {},
     select() {},
+    setAttribute(name, value) { this.attributes[name] = String(value); },
   };
 }
 
@@ -35,6 +44,8 @@ function loadPage(config = {}) {
   let downloadedBlob;
   let downloadedLink;
   let registrationRequest;
+  const downloadEvents = [];
+  const downloadStats = { total: 0, success: 0, failed: 0 };
   const document = {
     body,
     createElement() {
@@ -45,6 +56,7 @@ function loadPage(config = {}) {
       if (!elements.has(selector)) {
         const element = createFakeElement();
         if (selector === 'meta[name="agent-api-url"]') element.content = "https://api.cuixiaoxuan.com/api/agent/register";
+        if (selector === 'meta[name="download-api-url"]') element.content = "https://api.cuixiaoxuan.com/api/downloads";
         elements.set(selector, element);
       }
       return elements.get(selector);
@@ -57,6 +69,19 @@ function loadPage(config = {}) {
     TextEncoder,
     crypto: webcrypto,
     fetch: async (url, requestOptions) => {
+      if (String(url).includes("/api/downloads")) {
+        if (requestOptions?.method === "POST") {
+          const event = JSON.parse(requestOptions.body);
+          downloadEvents.push(event);
+          downloadStats[event.outcome] += 1;
+          downloadStats.total += 1;
+        }
+        return {
+          ok: true,
+          status: 200,
+          async json() { return { ok: true, stats: { page: "at-to-sub2api", ...downloadStats } }; },
+        };
+      }
       registrationRequest = { url, options: requestOptions, body: JSON.parse(requestOptions.body) };
       return {
         ok: config.responseStatus ? config.responseStatus >= 200 && config.responseStatus < 300 : true,
@@ -78,6 +103,7 @@ function loadPage(config = {}) {
     getDownloadedBlob() { return downloadedBlob; },
     getDownloadedLink() { return downloadedLink; },
     getRegistrationRequest() { return registrationRequest; },
+    getDownloadEvents() { return downloadEvents; },
   };
 }
 
@@ -141,6 +167,10 @@ async function testSingleTokenProducesImportFile() {
   assert.equal(page.getDownloadedLink().download, "sub2-agent-identity-one_example.com.json");
   assert.match(page.elements.get("#status").textContent, /sub2 Agent Identity/);
   assert.match(page.elements.get("#status").className, /success/);
+  assert.deepEqual(page.getDownloadEvents(), [{ page: "at-to-sub2api", outcome: "success" }]);
+  assert.equal(page.elements.get("#downloadTotal").textContent, "1");
+  assert.equal(page.elements.get("#downloadSuccess").textContent, "1");
+  assert.equal(page.elements.get("#downloadFailed").textContent, "0");
 }
 
 async function testBearerTokenIsAccepted() {
@@ -183,6 +213,8 @@ async function testInvalidTokenDoesNotEnableDownload() {
   assert.equal(page.getRegistrationRequest(), undefined);
   assert.match(page.elements.get("#status").textContent, /不是有效的 JWT/);
   assert.match(page.elements.get("#status").className, /error/);
+  assert.deepEqual(page.getDownloadEvents(), [{ page: "at-to-sub2api", outcome: "failed" }]);
+  assert.equal(page.elements.get("#downloadFailed").textContent, "1");
 }
 
 async function testMissingAgentBackendExplainsThatTokenIsNotTheProblem() {
@@ -201,6 +233,8 @@ function testStandaloneEntryIsLinkedFromMainPage() {
   assert.match(page.html, /<h1>越接码下载sub2文件<\/h1>/);
   assert.match(page.html, /私钥只在当前浏览器生成/);
   assert.match(page.html, /sub2api-data/);
+  assert.match(page.html, /<span>下载记录<\/span><small>sub2<\/small>/);
+  assert.match(page.html, /id="downloadSuccess"/);
 }
 
 async function main() {

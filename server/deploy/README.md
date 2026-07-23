@@ -3,7 +3,7 @@
 1. Copy the repository to `/opt/chatgpt-session-converter`.
 2. Create `/etc/chatgpt-session-converter/quota.env` from `server/.env.example`.
 3. Create `/etc/chatgpt-session-converter/agent.env` from `server/agent.env.example`.
-4. Set `ALLOWED_ORIGINS` in both files to the exact frontend origin and keep both services bound to `127.0.0.1`. The quota systemd unit creates `/var/lib/chatgpt-session-converter`; keep `VISIT_STORE_PATH` pointed at its `visits.json` file.
+4. Set `ALLOWED_ORIGINS` in both files to the exact frontend origin and keep both services bound to `127.0.0.1`. The quota systemd unit creates `/var/lib/chatgpt-session-converter`; keep `VISIT_STORE_PATH` and `DOWNLOAD_STORE_PATH` pointed at files inside that directory.
 5. Create the Python environment and install the Agent backend dependency:
 
    ```bash
@@ -13,6 +13,6 @@
 
 6. Install and enable both systemd units from `chatgpt-quota.service.example` and `chatgpt-agent.service.example`.
 7. Use `Caddyfile.example` or `nginx.conf.example` with the real API domain. The exact `/api/agent/register` route is sent to the Python service on port 8788; other routes remain on the Node service on port 8787.
-8. Issue a TLS certificate with Certbot, then set the frontend `quota-api-url` to `https://api.example.com/api/quota/check`, `agent-api-url` to `https://api.example.com/api/agent/register`, and `visitor-api-url` to `https://api.example.com/api/visits`.
+8. Issue a TLS certificate with Certbot, then set the frontend `quota-api-url` to `https://api.example.com/api/quota/check`, `agent-api-url` to `https://api.example.com/api/agent/register`, `visitor-api-url` to `https://api.example.com/api/visits`, and `download-api-url` to `https://api.example.com/api/downloads`.
 
 The quota service remains dependency-free and stores only daily page-view totals. The Agent service follows `codex_agent(2).py` and uses `curl_cffi` with Chrome impersonation for Runtime registration. It receives the access token and public key only; the private key remains in the browser.

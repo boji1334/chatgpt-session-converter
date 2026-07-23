@@ -7,7 +7,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="description" content="粘贴 ChatGPT accessToken 或完整 session JSON，注册 Agent Identity 并下载可直接导入 sub2api 的数据文件。">
   <meta name="agent-api-url" content="https://api.cuixiaoxuan.com/api/agent/register">
-  <meta name="visitor-api-url" content="https://api.cuixiaoxuan.com/api/visits">
+  <meta name="download-api-url" content="https://api.cuixiaoxuan.com/api/downloads">
   <title>越接码下载sub2文件</title>
   <style>
     :root {
@@ -207,13 +207,13 @@
       line-height: 1.5;
     }
 
-    .visit-widget {
+    .download-widget {
       position: fixed;
       right: 18px;
       bottom: 18px;
       z-index: 20;
-      width: 208px;
-      padding: 13px 14px 12px;
+      width: 252px;
+      padding: 13px;
       border: 1px solid #cadbd8;
       border-radius: 10px;
       background: rgba(255,255,255,.94);
@@ -222,16 +222,37 @@
       -webkit-backdrop-filter: blur(12px);
     }
 
-    .visit-widget-title { display: flex; align-items: center; gap: 8px; margin-bottom: 7px; color: #31545a; font-size: 12px; font-weight: 850; }
-    .visit-status-dot { width: 8px; height: 8px; flex: 0 0 auto; border-radius: 50%; background: #849a9d; box-shadow: 0 0 0 4px #edf3f2; }
-    .visit-widget:not([aria-busy="true"]):not(.error) .visit-status-dot { background: #2e9a75; box-shadow: 0 0 0 4px #dff1e9; }
-    .visit-widget.error .visit-status-dot { background: var(--orange); box-shadow: 0 0 0 4px var(--orange-soft); }
-    .visit-lines { display: grid; gap: 4px; }
-    .visit-line { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; color: var(--muted); font-size: 11px; line-height: 1.45; }
-    .visit-line span:last-child { text-align: right; }
-    .visit-value { display: inline-block; min-width: 2ch; color: #35545a; font-variant-numeric: tabular-nums; }
-    .visit-error { margin: 0; color: #8d5a35; font-size: 11px; line-height: 1.45; }
-    .visit-error[hidden], .visit-lines[hidden] { display: none; }
+    .download-widget-title { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 10px; color: #31545a; font-size: 12px; font-weight: 850; }
+    .download-widget-title small { color: #829095; font-size: 9px; font-weight: 700; letter-spacing: .05em; text-transform: uppercase; }
+    .download-stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 7px; }
+    .download-stat {
+      min-width: 0;
+      padding: 8px 5px 7px;
+      border: 1px solid #dbe6e4;
+      border-radius: 8px;
+      background: #f8fbfa;
+      text-align: center;
+    }
+    .download-symbol {
+      display: grid;
+      width: 22px;
+      height: 22px;
+      margin: 0 auto 5px;
+      place-items: center;
+      border-radius: 7px;
+      background: #e7f0ef;
+      color: #426166;
+      font-size: 12px;
+      font-weight: 950;
+      line-height: 1;
+    }
+    .download-stat.success .download-symbol { background: #dff1e9; color: #237b5e; }
+    .download-stat.failed .download-symbol { background: #fff0e8; color: #a85b32; }
+    .download-value { display: block; color: #203d43; font-size: 16px; font-variant-numeric: tabular-nums; line-height: 1.1; }
+    .download-label { display: block; margin-top: 3px; color: #78878b; font-size: 9px; font-weight: 750; }
+    .download-widget[aria-busy="true"] .download-value { color: #98a5a8; }
+    .download-error { margin: 0; color: #8d5a35; font-size: 11px; line-height: 1.45; }
+    .download-error[hidden], .download-stats[hidden] { display: none; }
 
     @media (max-width: 560px) {
       body { display: block; }
@@ -241,7 +262,7 @@
       .actions { grid-template-columns: 1fr; }
       .button.secondary { order: 2; }
       .foot { flex-direction: column; gap: 3px; }
-      .visit-widget { position: static; width: min(680px, calc(100% - 28px)); margin: 0 auto 16px; }
+      .download-widget { position: static; width: min(680px, calc(100% - 28px)); margin: 0 auto 16px; }
     }
   </style>
 </head>
@@ -277,13 +298,26 @@
     </footer>
   </main>
 
-  <aside class="visit-widget" id="visitWidget" aria-label="访问记录" aria-live="polite" aria-busy="true">
-    <div class="visit-widget-title"><span class="visit-status-dot" aria-hidden="true"></span><span>访问记录</span></div>
-    <div class="visit-lines" id="visitLines">
-      <div class="visit-line"><span>今日 <strong class="visit-value" id="visitToday">...</strong> 次</span><span>昨日 <strong class="visit-value" id="visitYesterday">...</strong> 次</span></div>
-      <div class="visit-line"><span>近 7 天 <strong class="visit-value" id="visitLast7Days">...</strong> 次</span><span>总计 <strong class="visit-value" id="visitTotal">...</strong> 次</span></div>
+  <aside class="download-widget" id="downloadWidget" aria-label="下载记录" aria-live="polite" aria-busy="true">
+    <div class="download-widget-title"><span>下载记录</span><small>sub2</small></div>
+    <div class="download-stats" id="downloadStats">
+      <div class="download-stat total" title="全部下载结果">
+        <span class="download-symbol" aria-hidden="true">Σ</span>
+        <strong class="download-value" id="downloadTotal">...</strong>
+        <span class="download-label">全部</span>
+      </div>
+      <div class="download-stat success" title="成功下载">
+        <span class="download-symbol" aria-hidden="true">✓</span>
+        <strong class="download-value" id="downloadSuccess">...</strong>
+        <span class="download-label">成功</span>
+      </div>
+      <div class="download-stat failed" title="下载失败">
+        <span class="download-symbol" aria-hidden="true">×</span>
+        <strong class="download-value" id="downloadFailed">...</strong>
+        <span class="download-label">失败</span>
+      </div>
     </div>
-    <p class="visit-error" id="visitError" hidden>访问统计暂未连接</p>
+    <p class="download-error" id="downloadError" hidden>下载统计暂未连接</p>
   </aside>
 
   <script>
@@ -291,46 +325,69 @@
       "use strict";
 
       const agentApiUrl = document.querySelector('meta[name="agent-api-url"]')?.content?.trim() || "";
-      const visitorMetaUrl = document.querySelector('meta[name="visitor-api-url"]')?.content?.trim() || "";
-      const visitorApiUrl = ["localhost", "127.0.0.1"].includes(globalThis.location?.hostname) ? "http://127.0.0.1:8787/api/visits" : visitorMetaUrl;
+      const downloadMetaUrl = document.querySelector('meta[name="download-api-url"]')?.content?.trim() || "";
+      const downloadApiUrl = ["localhost", "127.0.0.1"].includes(globalThis.location?.hostname) ? "http://127.0.0.1:8787/api/downloads" : downloadMetaUrl;
+      const downloadPage = "at-to-sub2api";
       const tokenInput = document.querySelector("#tokenInput");
       const downloadButton = document.querySelector("#downloadButton");
       const clearButton = document.querySelector("#clearButton");
       const status = document.querySelector("#status");
-      const visitWidget = document.querySelector("#visitWidget");
-      const visitLines = document.querySelector("#visitLines");
-      const visitError = document.querySelector("#visitError");
-      const visitToday = document.querySelector("#visitToday");
-      const visitYesterday = document.querySelector("#visitYesterday");
-      const visitLast7Days = document.querySelector("#visitLast7Days");
-      const visitTotal = document.querySelector("#visitTotal");
+      const downloadWidget = document.querySelector("#downloadWidget");
+      const downloadStats = document.querySelector("#downloadStats");
+      const downloadError = document.querySelector("#downloadError");
+      const downloadTotal = document.querySelector("#downloadTotal");
+      const downloadSuccess = document.querySelector("#downloadSuccess");
+      const downloadFailed = document.querySelector("#downloadFailed");
 
       function setStatus(message, kind = "") {
         status.textContent = message;
         status.className = `status${kind ? ` ${kind}` : ""}`;
       }
 
-      async function recordPageVisit() {
-        if (!visitorApiUrl || typeof fetch !== "function" || !visitWidget) return;
+      function renderDownloadStats(stats) {
+        const format = new Intl.NumberFormat("zh-CN");
+        downloadTotal.textContent = format.format(stats.total);
+        downloadSuccess.textContent = format.format(stats.success);
+        downloadFailed.textContent = format.format(stats.failed);
+        downloadStats.hidden = false;
+        downloadError.hidden = true;
+        downloadWidget.classList.remove("error");
+        downloadWidget.setAttribute("aria-busy", "false");
+      }
+
+      function showDownloadStatsError() {
+        if (!downloadWidget) return;
+        downloadWidget.classList.add("error");
+        downloadWidget.setAttribute("aria-busy", "false");
+        downloadStats.hidden = true;
+        downloadError.hidden = false;
+      }
+
+      async function loadDownloadStats() {
+        if (!downloadApiUrl || typeof fetch !== "function" || !downloadWidget) return;
         try {
-          const response = await fetch(visitorApiUrl, {
+          const response = await fetch(`${downloadApiUrl}?page=${encodeURIComponent(downloadPage)}`);
+          const payload = await response.json();
+          if (!response.ok || !payload?.ok || !payload.stats) throw new Error("download stats request failed");
+          renderDownloadStats(payload.stats);
+        } catch {
+          showDownloadStatsError();
+        }
+      }
+
+      async function recordDownloadOutcome(outcome) {
+        if (!downloadApiUrl || typeof fetch !== "function" || !downloadWidget) return;
+        try {
+          const response = await fetch(downloadApiUrl, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ page: "at-to-sub2api" }),
+            body: JSON.stringify({ page: downloadPage, outcome }),
           });
           const payload = await response.json();
-          if (!response.ok || !payload?.ok || !payload.stats) throw new Error("visitor request failed");
-          const format = new Intl.NumberFormat("zh-CN");
-          visitToday.textContent = format.format(payload.stats.today);
-          visitYesterday.textContent = format.format(payload.stats.yesterday);
-          visitLast7Days.textContent = format.format(payload.stats.last7Days);
-          visitTotal.textContent = format.format(payload.stats.total);
-          visitWidget.setAttribute("aria-busy", "false");
+          if (!response.ok || !payload?.ok || !payload.stats) throw new Error("download record request failed");
+          renderDownloadStats(payload.stats);
         } catch {
-          visitWidget.classList.add("error");
-          visitWidget.setAttribute("aria-busy", "false");
-          visitLines.hidden = true;
-          visitError.hidden = false;
+          showDownloadStatsError();
         }
       }
 
@@ -535,8 +592,10 @@
           const safeName = (info.email || info.accountId).replace(/[^a-zA-Z0-9._-]+/g, "_");
           downloadDocument(sub2Document, `sub2-agent-identity-${safeName}.json`);
           setStatus(`sub2 Agent Identity 文件已下载：${info.email || info.accountId} · ${info.planType}`, "success");
+          await recordDownloadOutcome("success");
         } catch (error) {
           setStatus(error.message, "error");
+          await recordDownloadOutcome("failed");
         } finally {
           downloadButton.disabled = false;
           downloadButton.textContent = originalLabel;
@@ -551,7 +610,7 @@
 
       downloadButton.addEventListener("click", downloadSub2);
       clearButton.addEventListener("click", clearAll);
-      recordPageVisit();
+      loadDownloadStats();
     })();
   </script>
 </body>
