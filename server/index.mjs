@@ -16,7 +16,7 @@ const AGENT_REGISTER_URL = process.env.AGENT_REGISTER_URL || "https://auth.opena
 const AGENT_VERSION = process.env.AGENT_VERSION || "0.138.0-alpha.6";
 const AGENT_HARNESS_ID = process.env.AGENT_HARNESS_ID || "codex-cli";
 const AGENT_RUNNING_LOCATION = process.env.AGENT_RUNNING_LOCATION || "local";
-const VERIFY_UPSTREAM_URL = process.env.VERIFY_UPSTREAM_URL || "https://api.openai.com/v1/models";
+const VERIFY_UPSTREAM_URL = process.env.VERIFY_UPSTREAM_URL || "https://chatgpt.com/backend-api/me";
 const ALLOWED_ORIGINS = new Set((process.env.ALLOWED_ORIGINS || "http://localhost:4173,http://127.0.0.1:4173").split(",").map((value) => value.trim()).filter(Boolean));
 const RATE_LIMIT_WINDOW_MS = 60_000;
 const RATE_LIMIT_MAX = Number(process.env.RATE_LIMIT_MAX || 30);
@@ -376,29 +376,44 @@ async function handleAccountVerify(request, response, origin) {
   const payload = parseJwtPayload(accessToken);
   const jwtInfo = payload ? extractAccountFromJwt(payload) : { account_id: "", user_id: "", email: "", plan_type: "free" };
 
-  // Verify the token against OpenAI API
+  // Verify the token against ChatGPT backend API
   try {
+    const headers = {
+      Accept: "application/json",
+      Authorization: `Bearer ${accessToken}`,
+      "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/146.0.0.0 Safari/537.36",
+    };
+    if (jwtInfo.account_id) {
+      headers["ChatGPT-Account-Id"] = jwtInfo.account_id;
+    }
+
     const upstream = await fetch(VERIFY_UPSTREAM_URL, {
       method: "GET",
-      headers: {
-        Accept: "application/json",
-        Authorization: `Bearer ${accessToken}`,
-        "User-Agent": "chatgpt-session-converter/1.0",
-      },
+      headers,
       signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
     });
 
+    // Try to read upstream response for additional account info
+    let upstreamData = {};
+    try {
+      const upstreamText = await upstream.text();
+      upstreamData = JSON.parse(upstreamText);
+    } catch { /* upstream didn't return valid JSON, that's ok */ }
+
     if (upstream.ok) {
-      // Token is valid — account is active
+      // Token is valid — account is active. Merge upstream data with JWT info.
+      const planType = upstreamData.plan_type || jwtInfo.plan_type || "free";
+      const email = upstreamData.email || jwtInfo.email || null;
+      const accountId = upstreamData.account_id || jwtInfo.account_id || body?.account_id || null;
       json(response, 200, {
         ok: true,
         active: true,
-        plan_type: jwtInfo.plan_type,
-        email: jwtInfo.email || null,
-        account_id: jwtInfo.account_id || body?.account_id || null,
-        user_id: jwtInfo.user_id || null,
+        plan_type: planType,
+        email,
+        account_id: accountId,
+        user_id: upstreamData.user_id || jwtInfo.user_id || null,
         token_expires_at: jwtInfo.expires_at || null,
-        message: `账号正常，套餐为 ${jwtInfo.plan_type || "free"}`,
+        message: `账号正常，套餐为 ${planType}`,
       }, origin);
     } else if (upstream.status === 401 || upstream.status === 403) {
       // Token is invalid
@@ -421,7 +436,7 @@ async function handleAccountVerify(request, response, origin) {
         email: jwtInfo.email || null,
         account_id: jwtInfo.account_id || null,
         upstream_status: upstream.status,
-        error: `OpenAI 返回了异常状态码 ${upstream.status}`,
+        error: `ChatGPT 返回了异常状态码 ${upstream.status}`,
       }, origin);
     }
   } catch (error) {
