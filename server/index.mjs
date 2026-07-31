@@ -416,7 +416,8 @@ async function handleAccountVerify(request, response, origin) {
         message: `账号正常，套餐为 ${planType}`,
       }, origin);
     } else if (upstream.status === 401 || upstream.status === 403) {
-      // Token is invalid
+      // Token is invalid — 403 usually means the account was deleted/banned
+      const reason = upstream.status === 403 ? "账号已被删除或被禁止访问" : "AT 已失效（已过期或已注销）";
       json(response, 200, {
         ok: true,
         active: false,
@@ -426,7 +427,7 @@ async function handleAccountVerify(request, response, origin) {
         user_id: jwtInfo.user_id || null,
         token_expires_at: jwtInfo.expires_at || null,
         upstream_status: upstream.status,
-        error: "AT 已失效或账号授权被拒绝",
+        error: reason,
       }, origin);
     } else {
       json(response, 200, {

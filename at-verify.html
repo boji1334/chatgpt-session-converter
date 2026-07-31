@@ -622,12 +622,15 @@
 
       function renderRemoteResult(remote, info) {
         const isActive = remote.active === true;
-        const headClass = isActive ? "success" : "error";
-        const icon = isActive ? "✓" : "✗";
-        const title = isActive ? "服务器验证通过" : "服务器验证失败";
+        const isUnknown = remote.active !== true && remote.active !== false;
+        const headClass = isActive ? "success" : (isUnknown ? "warning" : "error");
+        const icon = isActive ? "✓" : (isUnknown ? "!" : "✗");
+        const title = isActive ? "服务器验证通过" : (isUnknown ? "服务器验证暂不可用" : "服务器验证失败");
         const sub = isActive
           ? `OpenAI 确认账号正常 · 套餐：${planLabel(remote.plan_type || info.planType)}`
-          : (remote.error || "账号无法通过 OpenAI 验证，可能已被封禁或 AT 已失效");
+          : (isUnknown
+              ? (remote.error || "验证服务暂不可用，已按本地 JWT 信息显示套餐")
+              : (remote.error || "账号无法通过 OpenAI 验证，可能已被删除或 AT 已失效"));
 
         const planType = remote.plan_type || info.planType || "free";
 
@@ -698,8 +701,10 @@
               renderRemoteResult(remote, info);
               if (remote.ok && remote.active) {
                 setStatus(`验证完成：账号正常，套餐为 ${planLabel(remote.plan_type || info.planType)}。`, "success");
-              } else if (remote.ok && !remote.active) {
+              } else if (remote.ok && remote.active === false) {
                 setStatus(`验证完成：账号异常 — ${remote.error || "服务器验证未通过"}。`, "error");
+              } else if (remote.ok) {
+                setStatus(`服务器验证暂不可用：${remote.error || "无法连接 OpenAI"}。已按本地 JWT 显示套餐。`, "warning");
               } else {
                 setStatus(`验证完成：服务器返回错误 — ${remote.error || "未知错误"}。`, "error");
               }
