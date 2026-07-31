@@ -16,6 +16,7 @@ const AGENT_REGISTER_URL = process.env.AGENT_REGISTER_URL || "https://auth.opena
 const AGENT_VERSION = process.env.AGENT_VERSION || "0.138.0-alpha.6";
 const AGENT_HARNESS_ID = process.env.AGENT_HARNESS_ID || "codex-cli";
 const AGENT_RUNNING_LOCATION = process.env.AGENT_RUNNING_LOCATION || "local";
+const VERIFY_UPSTREAM_URL = process.env.VERIFY_UPSTREAM_URL || "https://api.openai.com/v1/models";
 const ALLOWED_ORIGINS = new Set((process.env.ALLOWED_ORIGINS || "http://localhost:4173,http://127.0.0.1:4173").split(",").map((value) => value.trim()).filter(Boolean));
 const RATE_LIMIT_WINDOW_MS = 60_000;
 const RATE_LIMIT_MAX = Number(process.env.RATE_LIMIT_MAX || 30);
@@ -322,6 +323,123 @@ async function handleDownloadRecord(request, response, origin) {
   }
 }
 
+function decodeBase64Url(value) {
+  const normalized = value.replace(/-/g, "+").replace(/_/g, "/");
+  const padded = normalized + "=".repeat((4 - normalized.length % 4) % 4);
+  return Buffer.from(padded, "base64").toString("utf8");
+}
+
+function parseJwtPayload(token) {
+  const segments = token.split(".");
+  if (segments.length !== 3) return undefined;
+  try { return JSON.parse(decodeBase64Url(segments[1])); }
+  catch { return undefined; }
+}
+
+function extractAccountFromJwt(payload) {
+  const auth = payload && typeof payload === "object" && !Array.isArray(payload)
+    ? (payload["https://api.openai.com/auth"] || {})
+    : {};
+  const profile = payload && typeof payload === "object" && !Array.isArray(payload)
+    ? (payload["https://api.openai.com/profile"] || {})
+    : {};
+  return {
+    account_id: auth.chatgpt_account_id || "",
+    user_id: auth.chatgpt_user_id || auth.user_id || "",
+    email: profile.email || payload?.email || "",
+    plan_type: auth.chatgpt_plan_type || "free",
+    expires_at: payload?.exp ? new Date(payload.exp * 1000).toISOString() : undefined,
+  };
+}
+
+async function handleAccountVerify(request, response, origin) {
+  if (!clientAllowed(request)) {
+    json(response, 429, { ok: false, error: "请求过于频繁，请稍后重试" }, origin);
+    return;
+  }
+
+  let body;
+  try {
+    body = await readBody(request);
+  } catch (error) {
+    json(response, 400, { ok: false, error: error.message }, origin);
+    return;
+  }
+
+  const accessToken = (typeof body?.access_token === "string" ? body.access_token.trim() : "");
+  if (!accessToken) {
+    json(response, 400, { ok: false, error: "缺少 access_token" }, origin);
+    return;
+  }
+
+  // Parse JWT to extract account info (plan_type, email, account_id)
+  const payload = parseJwtPayload(accessToken);
+  const jwtInfo = payload ? extractAccountFromJwt(payload) : { account_id: "", user_id: "", email: "", plan_type: "free" };
+
+  // Verify the token against OpenAI API
+  try {
+    const upstream = await fetch(VERIFY_UPSTREAM_URL, {
+      method: "GET",
+      headers: {
+        Accept: "application/json",
+        Authorization: `Bearer ${accessToken}`,
+        "User-Agent": "chatgpt-session-converter/1.0",
+      },
+      signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
+    });
+
+    if (upstream.ok) {
+      // Token is valid — account is active
+      json(response, 200, {
+        ok: true,
+        active: true,
+        plan_type: jwtInfo.plan_type,
+        email: jwtInfo.email || null,
+        account_id: jwtInfo.account_id || body?.account_id || null,
+        user_id: jwtInfo.user_id || null,
+        token_expires_at: jwtInfo.expires_at || null,
+        message: `账号正常，套餐为 ${jwtInfo.plan_type || "free"}`,
+      }, origin);
+    } else if (upstream.status === 401 || upstream.status === 403) {
+      // Token is invalid
+      json(response, 200, {
+        ok: true,
+        active: false,
+        plan_type: jwtInfo.plan_type || null,
+        email: jwtInfo.email || null,
+        account_id: jwtInfo.account_id || null,
+        user_id: jwtInfo.user_id || null,
+        token_expires_at: jwtInfo.expires_at || null,
+        upstream_status: upstream.status,
+        error: "AT 已失效或账号授权被拒绝",
+      }, origin);
+    } else {
+      json(response, 200, {
+        ok: true,
+        active: false,
+        plan_type: jwtInfo.plan_type || null,
+        email: jwtInfo.email || null,
+        account_id: jwtInfo.account_id || null,
+        upstream_status: upstream.status,
+        error: `OpenAI 返回了异常状态码 ${upstream.status}`,
+      }, origin);
+    }
+  } catch (error) {
+    // Network error — still return JWT info as fallback
+    const message = error?.name === "TimeoutError" ? "验证请求超时" : "验证请求连接失败";
+    json(response, 200, {
+      ok: true,
+      active: null,
+      plan_type: jwtInfo.plan_type || null,
+      email: jwtInfo.email || null,
+      account_id: jwtInfo.account_id || null,
+      user_id: jwtInfo.user_id || null,
+      token_expires_at: jwtInfo.expires_at || null,
+      error: message,
+    }, origin);
+  }
+}
+
 const server = http.createServer(async (request, response) => {
   const origin = allowedOrigin(request);
   if (request.headers.origin && !origin) {
@@ -350,6 +468,10 @@ const server = http.createServer(async (request, response) => {
   }
   if (request.method === "POST" && url.pathname === "/api/agent/register") {
     await handleAgentRegister(request, response, origin);
+    return;
+  }
+  if (request.method === "POST" && url.pathname === "/api/account/verify") {
+    await handleAccountVerify(request, response, origin);
     return;
   }
   if (request.method === "POST" && url.pathname === "/api/visits") {

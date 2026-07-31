@@ -1,0 +1,742 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; connect-src https://api.cuixiaoxuan.com http://127.0.0.1:8787; object-src 'none'; base-uri 'none'; form-action 'none'">
+  <meta name="referrer" content="no-referrer">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="验证 ChatGPT accessToken 或 session，检测账号是否正常以及套餐类型。">
+  <meta name="verify-api-url" content="https://api.cuixiaoxuan.com/api/account/verify">
+  <title>AT验活 · ChatGPT 账号验证</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --ink: #17262d;
+      --muted: #68767b;
+      --line: #d5e1df;
+      --teal: #1c6d6a;
+      --teal-dark: #145451;
+      --teal-soft: #e3f2f0;
+      --orange: #a85b32;
+      --orange-soft: #fff0e8;
+      --red: #b15436;
+      --green: #2e806d;
+      --green-soft: #dff1e9;
+    }
+
+    * { box-sizing: border-box; }
+    html { min-width: 320px; background: #edf5f3; }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      display: grid;
+      place-items: center;
+      color: var(--ink);
+      background:
+        radial-gradient(circle at 18% 5%, rgba(255,255,255,.96), transparent 34%),
+        linear-gradient(135deg, rgba(255,255,255,.38), transparent 55%),
+        #edf5f3;
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+
+    button, textarea { font: inherit; }
+    button { cursor: pointer; }
+
+    .shell {
+      width: min(680px, calc(100% - 28px));
+      padding: 28px 0;
+    }
+
+    .page-nav { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin: 0 2px 16px; }
+
+    .back {
+      display: inline-block;
+      color: var(--teal-dark);
+      font-size: 13px;
+      font-weight: 800;
+      text-decoration: none;
+    }
+
+    .back:hover { text-decoration: underline; }
+
+    .github-cta {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      min-height: 44px;
+      padding: 7px 8px 7px 12px;
+      border: 1px solid #c8d7d5;
+      border-radius: 10px;
+      background: rgba(255,255,255,.88);
+      color: var(--ink);
+      text-decoration: none;
+      box-shadow: 0 8px 22px rgba(31,67,69,.08);
+      transition: border-color .18s ease, transform .18s ease, box-shadow .18s ease;
+    }
+
+    .github-cta:hover { border-color: var(--teal); transform: translateY(-1px); box-shadow: 0 10px 25px rgba(31,67,69,.12); }
+    .github-cta:active { transform: translateY(1px); }
+    .github-cta:focus-visible { outline: 3px solid rgba(28,109,106,.2); outline-offset: 2px; }
+    .github-cta-copy { display: grid; gap: 1px; }
+    .github-cta-label { color: var(--muted); font-size: 9px; font-weight: 750; }
+    .github-cta strong { font-size: 12px; line-height: 1.2; white-space: nowrap; }
+    .github-star { display: grid; width: 28px; height: 28px; place-items: center; border-radius: 8px; background: var(--teal); color: white; font-size: 14px; }
+
+    .card {
+      overflow: hidden;
+      border: 1px solid rgba(203,219,216,.96);
+      border-radius: 16px;
+      background: rgba(255,255,255,.92);
+      box-shadow: 0 28px 80px rgba(31,67,69,.13);
+    }
+
+    .head {
+      padding: 30px 32px 23px;
+      border-bottom: 1px solid var(--line);
+    }
+
+    .eyebrow {
+      margin: 0 0 8px;
+      color: var(--teal);
+      font-size: 11px;
+      font-weight: 900;
+      letter-spacing: .16em;
+      text-transform: uppercase;
+    }
+
+    h1 {
+      margin: 0 0 10px;
+      font-size: clamp(32px, 7vw, 48px);
+      line-height: 1.02;
+      letter-spacing: -.04em;
+    }
+
+    .lead {
+      margin: 0;
+      color: var(--muted);
+      font-size: 14px;
+      line-height: 1.65;
+    }
+
+    .body { padding: 25px 32px 30px; }
+
+    label {
+      display: block;
+      margin-bottom: 8px;
+      color: #35515a;
+      font-size: 12px;
+      font-weight: 850;
+    }
+
+    textarea {
+      width: 100%;
+      min-height: 190px;
+      padding: 14px;
+      resize: vertical;
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      outline: none;
+      background: #fbfdfd;
+      color: var(--ink);
+      font-family: ui-monospace, SFMono-Regular, Consolas, "Liberation Mono", monospace;
+      font-size: 12px;
+      line-height: 1.6;
+    }
+
+    textarea:focus {
+      border-color: var(--teal);
+      box-shadow: 0 0 0 3px rgba(28,109,106,.12);
+    }
+
+    .privacy {
+      margin: 9px 0 0;
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.55;
+    }
+
+    .actions {
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: 9px;
+      margin-top: 18px;
+    }
+
+    .button {
+      min-height: 46px;
+      padding: 10px 16px;
+      border: 1px solid var(--line);
+      border-radius: 9px;
+      background: white;
+      color: #35515a;
+      font-size: 14px;
+      font-weight: 900;
+    }
+
+    .button:disabled { cursor: not-allowed; opacity: .55; }
+
+    .button.primary {
+      border-color: var(--teal);
+      background: var(--teal);
+      color: white;
+      box-shadow: 0 10px 24px rgba(28,109,106,.19);
+    }
+
+    .button.primary:hover:not(:disabled) { background: var(--teal-dark); }
+    .button.secondary:hover:not(:disabled) { border-color: #b6cbc7; }
+
+    .status {
+      min-height: 24px;
+      margin: 13px 0 0;
+      padding: 10px 11px;
+      border: 1px solid transparent;
+      border-radius: 8px;
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.55;
+    }
+
+    .status.success { border-color: #b9d9d5; background: var(--teal-soft); color: var(--teal-dark); }
+    .status.warning { border-color: #e7bba7; background: var(--orange-soft); color: var(--orange); }
+    .status.error { border-color: #dfaaa0; background: #fff2ef; color: var(--red); }
+
+    /* Result card */
+    .result {
+      display: none;
+      margin-top: 18px;
+      overflow: hidden;
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      background: #fbfdfd;
+    }
+
+    .result.visible { display: block; }
+
+    .result-head {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 16px 18px;
+      border-bottom: 1px solid var(--line);
+    }
+
+    .result-head.success { background: var(--green-soft); border-color: #b9d9d5; }
+    .result-head.error { background: #fff2ef; border-color: #dfaaa0; }
+    .result-head.warning { background: var(--orange-soft); border-color: #e7bba7; }
+
+    .result-status-icon {
+      display: grid;
+      width: 40px;
+      height: 40px;
+      place-items: center;
+      border-radius: 50%;
+      font-size: 20px;
+      font-weight: 900;
+      flex: 0 0 auto;
+    }
+
+    .result-head.success .result-status-icon { background: #c2e6da; color: var(--green); }
+    .result-head.error .result-status-icon { background: #f5d5cb; color: var(--red); }
+    .result-head.warning .result-status-icon { background: #ffe0cc; color: var(--orange); }
+
+    .result-status-text { flex: 1; min-width: 0; }
+    .result-status-title { font-size: 16px; font-weight: 850; line-height: 1.25; }
+    .result-head.success .result-status-title { color: var(--green); }
+    .result-head.error .result-status-title { color: var(--red); }
+    .result-head.warning .result-status-title { color: var(--orange); }
+
+    .result-status-sub { margin-top: 2px; color: var(--muted); font-size: 12px; }
+
+    .result-body { padding: 14px 18px; }
+
+    .result-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+    }
+
+    .result-field {
+      min-width: 0;
+      padding: 12px 14px;
+      border: 1px solid #e3ecea;
+      border-radius: 9px;
+      background: white;
+    }
+
+    .result-field.span-2 { grid-column: 1 / -1; }
+
+    .result-field-label {
+      margin-bottom: 4px;
+      color: #527076;
+      font-size: 10px;
+      font-weight: 800;
+      letter-spacing: .06em;
+      text-transform: uppercase;
+    }
+
+    .result-field-value {
+      color: var(--ink);
+      font-size: 14px;
+      font-weight: 750;
+      word-break: break-all;
+    }
+
+    .result-field-value.plan {
+      font-size: 18px;
+      font-weight: 850;
+    }
+
+    .plan-badge {
+      display: inline-block;
+      padding: 4px 14px;
+      border-radius: 999px;
+      font-size: 15px;
+      font-weight: 850;
+      letter-spacing: .02em;
+    }
+
+    .plan-badge.free { background: #e3f2f0; color: #1c6d6a; }
+    .plan-badge.plus { background: #e8f0ff; color: #2955c8; }
+    .plan-badge.pro { background: #f3e8ff; color: #6b2fc2; }
+    .plan-badge.team { background: #fff3e0; color: #b85c1a; }
+    .plan-badge.enterprise { background: #fce4ec; color: #b13a56; }
+    .plan-badge.unknown { background: #f1f3f5; color: #68767b; }
+
+    .result-raw {
+      margin-top: 12px;
+      border-top: 1px solid #e3ecea;
+      padding-top: 12px;
+    }
+
+    .result-raw summary {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      color: var(--muted);
+      font-size: 11px;
+      font-weight: 750;
+      cursor: pointer;
+      list-style: none;
+      user-select: none;
+    }
+
+    .result-raw summary::-webkit-details-marker { display: none; }
+    .result-raw summary::after { content: "展开"; font-weight: 650; }
+    .result-raw[open] summary::after { content: "收起"; }
+    .result-raw summary:hover { color: var(--teal-dark); }
+
+    .result-raw pre {
+      max-height: 240px;
+      margin: 10px 0 0;
+      overflow: auto;
+      padding: 10px 12px;
+      border: 1px solid #e3ecea;
+      border-radius: 8px;
+      background: #f8fbfa;
+      color: #3b565b;
+      font-family: ui-monospace, SFMono-Regular, Consolas, "Liberation Mono", monospace;
+      font-size: 11px;
+      line-height: 1.55;
+      white-space: pre-wrap;
+      word-break: break-all;
+    }
+
+    .foot {
+      display: flex;
+      justify-content: space-between;
+      gap: 14px;
+      padding: 15px 2px 0;
+      color: var(--muted);
+      font-size: 11px;
+      line-height: 1.5;
+    }
+
+    .foot a { color: var(--teal-dark); font-weight: 750; text-decoration: none; }
+
+    @media (max-width: 560px) {
+      body { display: block; }
+      .shell { margin: 0 auto; }
+      .page-nav { align-items: flex-start; flex-direction: column; }
+      .head, .body { padding-left: 20px; padding-right: 20px; }
+      .actions { grid-template-columns: 1fr; }
+      .button.secondary { order: 2; }
+      .result-grid { grid-template-columns: 1fr; }
+      .foot { flex-direction: column; gap: 3px; }
+    }
+  </style>
+</head>
+<body>
+  <main class="shell">
+    <div class="page-nav">
+      <a class="back" href="./">← 返回原转换器</a>
+      <a class="github-cta" href="https://github.com/boji1334/chatgpt-session-converter" target="_blank" rel="noopener noreferrer" aria-label="在 GitHub 打开项目并点 Star">
+        <span class="github-cta-copy"><span class="github-cta-label">GitHub 开源项目</span><strong>喜欢的话，求个 Star</strong></span>
+        <span class="github-star" aria-hidden="true">★</span>
+      </a>
+    </div>
+    <section class="card">
+      <header class="head">
+        <p class="eyebrow">Account Verifier</p>
+        <h1>AT验活</h1>
+        <p class="lead">粘贴 ChatGPT accessToken 或完整 session JSON，验证账号是否正常并查看套餐类型。</p>
+      </header>
+      <div class="body">
+        <label for="tokenInput">ChatGPT accessToken / session JSON</label>
+        <textarea id="tokenInput" spellcheck="false" autocomplete="off" placeholder="eyJhbGciOi...&#10;&#10;也支持 Bearer eyJ... 或包含 accessToken、user、account 的完整 JSON"></textarea>
+        <p class="privacy">AT 仅用于向 OpenAI 验证账号状态；服务端不保存凭据，验证完成后即丢弃。</p>
+        <div class="actions">
+          <button class="button primary" id="verifyButton" type="button">验证账号</button>
+          <button class="button secondary" id="clearButton" type="button">清空</button>
+        </div>
+        <p class="status" id="status" aria-live="polite">等待粘贴 AT 或 session JSON。</p>
+
+        <!-- Result card -->
+        <div class="result" id="result" aria-live="polite">
+          <div class="result-head" id="resultHead">
+            <span class="result-status-icon" id="resultIcon"></span>
+            <div class="result-status-text">
+              <div class="result-status-title" id="resultTitle"></div>
+              <div class="result-status-sub" id="resultSub"></div>
+            </div>
+          </div>
+          <div class="result-body">
+            <div class="result-grid">
+              <div class="result-field span-2">
+                <div class="result-field-label">套餐类型</div>
+                <div class="result-field-value plan" id="resultPlan"></div>
+              </div>
+              <div class="result-field">
+                <div class="result-field-label">邮箱</div>
+                <div class="result-field-value" id="resultEmail">—</div>
+              </div>
+              <div class="result-field">
+                <div class="result-field-label">账号 ID</div>
+                <div class="result-field-value" id="resultAccountId">—</div>
+              </div>
+              <div class="result-field">
+                <div class="result-field-label">Token 过期时间</div>
+                <div class="result-field-value" id="resultExpiry">—</div>
+              </div>
+              <div class="result-field">
+                <div class="result-field-label">验证方式</div>
+                <div class="result-field-value" id="resultMethod">—</div>
+              </div>
+            </div>
+            <details class="result-raw" id="resultRawDetails">
+              <summary>查看原始 JWT 解析数据</summary>
+              <pre id="resultRaw"></pre>
+            </details>
+          </div>
+        </div>
+      </div>
+    </section>
+    <footer class="foot">
+      <span>仅验证 · 不保存凭据 · 不下发文件</span>
+      <a href="./at-to-sub2api.html">需要下载文件？前往越接码入口 →</a>
+    </footer>
+  </main>
+
+  <script>
+    (() => {
+      "use strict";
+
+      const verifyMetaUrl = document.querySelector('meta[name="verify-api-url"]')?.content?.trim() || "";
+      const verifyApiUrl = ["localhost", "127.0.0.1"].includes(globalThis.location?.hostname) ? "http://127.0.0.1:8787/api/account/verify" : verifyMetaUrl;
+
+      const tokenInput = document.querySelector("#tokenInput");
+      const verifyButton = document.querySelector("#verifyButton");
+      const clearButton = document.querySelector("#clearButton");
+      const status = document.querySelector("#status");
+      const result = document.querySelector("#result");
+      const resultHead = document.querySelector("#resultHead");
+      const resultIcon = document.querySelector("#resultIcon");
+      const resultTitle = document.querySelector("#resultTitle");
+      const resultSub = document.querySelector("#resultSub");
+      const resultPlan = document.querySelector("#resultPlan");
+      const resultEmail = document.querySelector("#resultEmail");
+      const resultAccountId = document.querySelector("#resultAccountId");
+      const resultExpiry = document.querySelector("#resultExpiry");
+      const resultMethod = document.querySelector("#resultMethod");
+      const resultRaw = document.querySelector("#resultRaw");
+      const resultRawDetails = document.querySelector("#resultRawDetails");
+
+      function setStatus(message, kind = "") {
+        status.textContent = message;
+        status.className = `status${kind ? ` ${kind}` : ""}`;
+      }
+
+      function hideResult() {
+        result.classList.remove("visible");
+      }
+
+      function showResult(headClass, icon, title, sub) {
+        resultHead.className = `result-head ${headClass}`;
+        resultIcon.textContent = icon;
+        resultTitle.textContent = title;
+        resultSub.textContent = sub;
+        result.classList.add("visible");
+      }
+
+      function decodeBase64Url(value) {
+        const normalized = value.replace(/-/g, "+").replace(/_/g, "/");
+        const padded = normalized.padEnd(Math.ceil(normalized.length / 4) * 4, "=");
+        const binary = atob(padded);
+        const bytes = Uint8Array.from(binary, (char) => char.charCodeAt(0));
+        return new TextDecoder().decode(bytes);
+      }
+
+      function firstText(...values) {
+        return values.find((value) => typeof value === "string" && value.trim())?.trim();
+      }
+
+      function parseToken(raw) {
+        const token = String(raw || "").trim().replace(/^Bearer\s+/i, "").trim();
+        if (!token || /\s/.test(token)) throw new Error("请只粘贴一个完整的 AT，不要包含空格或换行");
+        const segments = token.split(".");
+        if (segments.length !== 3) throw new Error("AT 不是有效的 JWT 格式（需要三段 Base64URL）");
+        let payload;
+        try {
+          payload = JSON.parse(decodeBase64Url(segments[1]));
+          if (!payload || typeof payload !== "object" || Array.isArray(payload)) throw new Error();
+        } catch {
+          throw new Error("AT 的 JWT payload 解析失败，请确认复制完整");
+        }
+        return { token, payload };
+      }
+
+      function parseInput(raw) {
+        const text = raw.trim();
+        if (!text) throw new Error("请先粘贴 AT 或 session JSON");
+
+        if (text.startsWith("{") || text.startsWith("[")) {
+          let parsed;
+          try { parsed = JSON.parse(text); }
+          catch { throw new Error("session JSON 解析失败，请检查格式"); }
+          const record = Array.isArray(parsed) ? parsed[0] : parsed;
+          if (!record || typeof record !== "object" || Array.isArray(record)) throw new Error("session JSON 中没有找到账号对象");
+          const accessToken = firstText(
+            record.accessToken, record.access_token,
+            record.tokens?.accessToken, record.tokens?.access_token,
+            record.credentials?.accessToken, record.credentials?.access_token
+          );
+          if (!accessToken) throw new Error("session JSON 缺少 accessToken 字段");
+          return { ...parseToken(accessToken), record };
+        }
+
+        return { ...parseToken(text), record: {} };
+      }
+
+      function extractAccountInfo(payload, record) {
+        const auth = payload["https://api.openai.com/auth"] || {};
+        const profile = payload["https://api.openai.com/profile"] || {};
+
+        const accountId = firstText(
+          record.account?.id, record.account_id, record.chatgpt_account_id,
+          record.credentials?.chatgpt_account_id, auth.chatgpt_account_id
+        );
+        const userId = firstText(
+          record.user?.id, record.user_id, record.chatgpt_user_id,
+          record.credentials?.chatgpt_user_id, auth.chatgpt_user_id, auth.user_id
+        );
+        const email = firstText(
+          record.user?.email, record.email, record.credentials?.email,
+          profile.email, payload.email
+        );
+        const planType = firstText(
+          record.account?.planType, record.account?.plan_type,
+          record.planType, record.plan_type,
+          record.credentials?.plan_type, auth.chatgpt_plan_type
+        ) || "free";
+
+        const iat = payload.iat ? new Date(payload.iat * 1000) : undefined;
+        const exp = payload.exp ? new Date(payload.exp * 1000) : undefined;
+        const iss = payload.iss || "";
+        const isFedramp = record.account?.isFedrampCompliantWorkspace === true || record.chatgpt_account_is_fedramp === true;
+
+        return { accountId, userId, email, planType, iat, exp, iss, isFedramp, auth, profile };
+      }
+
+      function planLabel(planType) {
+        const map = {
+          free: "Free · 免费版",
+          plus: "Plus · 付费版",
+          pro: "Pro · 专业版",
+          team: "Team · 团队版",
+          enterprise: "Enterprise · 企业版",
+        };
+        return map[planType] || (planType ? `${planType}` : "未知");
+      }
+
+      function planBadgeClass(planType) {
+        const known = new Set(["free", "plus", "pro", "team", "enterprise"]);
+        return known.has(planType) ? planType : "unknown";
+      }
+
+      function formatDate(date) {
+        if (!date || Number.isNaN(date.getTime())) return "未提供";
+        const formatter = new Intl.DateTimeFormat("zh-CN", {
+          year: "numeric", month: "2-digit", day: "2-digit",
+          hour: "2-digit", minute: "2-digit", second: "2-digit",
+          hour12: false,
+        });
+        return formatter.format(date);
+      }
+
+      function renderLocalResult(info) {
+        const now = new Date();
+        const isExpired = info.exp && info.exp.getTime() <= now.getTime();
+        const expiresIn = info.exp ? Math.max(0, Math.floor((info.exp.getTime() - now.getTime()) / 1000)) : undefined;
+        const expiresText = info.exp
+          ? (isExpired
+              ? `已过期（${formatDate(info.exp)}）`
+              : `${formatDate(info.exp)}（剩余 ${Math.floor(expiresIn / 3600)}h ${Math.floor((expiresIn % 3600) / 60)}m）`)
+          : "未提供";
+
+        const headClass = isExpired ? "error" : "success";
+        const icon = isExpired ? "✗" : "✓";
+        const title = isExpired ? "Token 已过期" : "账号验证通过";
+        const sub = isExpired
+          ? "该 accessToken 已经超过有效期，请换一个新的 AT 重试"
+          : `账号正常 · 套餐：${planLabel(info.planType)}`;
+
+        showResult(headClass, icon, title, sub);
+        resultPlan.innerHTML = `<span class="plan-badge ${planBadgeClass(info.planType)}">${planLabel(info.planType)}</span>`;
+        resultEmail.textContent = info.email || "未提供";
+        resultAccountId.textContent = info.accountId || "未提供";
+        resultExpiry.textContent = expiresText;
+        resultMethod.textContent = "本地 JWT 解析";
+
+        const rawInfo = {
+          plan_type: info.planType,
+          email: info.email || null,
+          account_id: info.accountId || null,
+          user_id: info.userId || null,
+          issued_at: info.iat ? info.iat.toISOString() : null,
+          expires_at: info.exp ? info.exp.toISOString() : null,
+          is_expired: isExpired,
+          issuer: info.iss || null,
+          is_fedramp: info.isFedramp || false,
+        };
+        resultRaw.textContent = JSON.stringify(rawInfo, null, 2);
+      }
+
+      function renderRemoteResult(remote, info) {
+        const isActive = remote.active === true;
+        const headClass = isActive ? "success" : "error";
+        const icon = isActive ? "✓" : "✗";
+        const title = isActive ? "服务器验证通过" : "服务器验证失败";
+        const sub = isActive
+          ? `OpenAI 确认账号正常 · 套餐：${planLabel(remote.plan_type || info.planType)}`
+          : (remote.error || "账号无法通过 OpenAI 验证，可能已被封禁或 AT 已失效");
+
+        const planType = remote.plan_type || info.planType || "free";
+
+        showResult(headClass, icon, title, sub);
+        resultPlan.innerHTML = `<span class="plan-badge ${planBadgeClass(planType)}">${planLabel(planType)}</span>`;
+        resultEmail.textContent = remote.email || info.email || "未提供";
+        resultAccountId.textContent = remote.account_id || info.accountId || "未提供";
+
+        const expDate = info.exp;
+        const now = new Date();
+        const expiresIn = expDate ? Math.max(0, Math.floor((expDate.getTime() - now.getTime()) / 1000)) : undefined;
+        const expiresText = expDate
+          ? `${formatDate(expDate)}${expiresIn !== undefined ? `（剩余 ${Math.floor(expiresIn / 3600)}h ${Math.floor((expiresIn % 3600) / 60)}m）` : ""}`
+          : "未提供";
+        resultExpiry.textContent = expiresText;
+        resultMethod.textContent = "服务器远程验证 (OpenAI API)";
+
+        const rawInfo = {
+          verified: isActive,
+          plan_type: planType,
+          email: remote.email || info.email || null,
+          account_id: remote.account_id || info.accountId || null,
+          user_id: remote.user_id || info.userId || null,
+          token_expires_at: expDate ? expDate.toISOString() : null,
+          token_is_expired: expDate ? expDate.getTime() <= now.getTime() : null,
+          upstream_status: remote.upstream_status || null,
+          error: remote.error || null,
+        };
+        resultRaw.textContent = JSON.stringify(rawInfo, null, 2);
+      }
+
+      async function verifyRemotely(accessToken, accountId) {
+        if (!verifyApiUrl) return null;
+        try {
+          const response = await fetch(verifyApiUrl, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ access_token: accessToken, account_id: accountId || "" }),
+          });
+          let payload;
+          try { payload = await response.json(); }
+          catch { payload = {}; }
+          return { ok: response.ok && payload?.ok === true, ...payload };
+        } catch {
+          return null;
+        }
+      }
+
+      async function doVerify() {
+        const originalLabel = verifyButton.textContent;
+        verifyButton.disabled = true;
+        verifyButton.textContent = "正在验证...";
+        hideResult();
+
+        try {
+          // Step 1: Parse input and extract JWT info
+          const { token, payload, record } = parseInput(tokenInput.value);
+          const info = extractAccountInfo(payload, record);
+
+          // Step 2: Show local JWT result immediately
+          renderLocalResult(info);
+          setStatus("JWT 解析完成，正在通过服务器进一步验证...", "warning");
+
+          // Step 3: Try remote verification
+          if (verifyApiUrl) {
+            const remote = await verifyRemotely(token, info.accountId);
+            if (remote) {
+              renderRemoteResult(remote, info);
+              if (remote.ok && remote.active) {
+                setStatus(`验证完成：账号正常，套餐为 ${planLabel(remote.plan_type || info.planType)}。`, "success");
+              } else if (remote.ok && !remote.active) {
+                setStatus(`验证完成：账号异常 — ${remote.error || "服务器验证未通过"}。`, "error");
+              } else {
+                setStatus(`验证完成：服务器返回错误 — ${remote.error || "未知错误"}。`, "error");
+              }
+            } else {
+              setStatus(`本地 JWT 解析完成（服务器不可用）：套餐为 ${planLabel(info.planType)}。`, "warning");
+              resultMethod.textContent = "仅本地 JWT 解析（服务器未连接）";
+            }
+          } else {
+            setStatus(`本地 JWT 解析完成：套餐为 ${planLabel(info.planType)}。`, "success");
+          }
+        } catch (error) {
+          setStatus(error.message, "error");
+          hideResult();
+        } finally {
+          verifyButton.disabled = false;
+          verifyButton.textContent = originalLabel;
+        }
+      }
+
+      function clearAll() {
+        tokenInput.value = "";
+        hideResult();
+        setStatus("等待粘贴 AT 或 session JSON。");
+        tokenInput.focus();
+      }
+
+      verifyButton.addEventListener("click", doVerify);
+      clearButton.addEventListener("click", clearAll);
+
+      // Allow Enter to submit (but Shift+Enter for newline)
+      tokenInput.addEventListener("keydown", (event) => {
+        if (event.key === "Enter" && !event.shiftKey) {
+          event.preventDefault();
+          doVerify();
+        }
+      });
+    })();
+  </script>
+</body>
+</html>
