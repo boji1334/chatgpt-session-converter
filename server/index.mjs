@@ -17,6 +17,8 @@ const AGENT_VERSION = process.env.AGENT_VERSION || "0.138.0-alpha.6";
 const AGENT_HARNESS_ID = process.env.AGENT_HARNESS_ID || "codex-cli";
 const AGENT_RUNNING_LOCATION = process.env.AGENT_RUNNING_LOCATION || "local";
 const VERIFY_UPSTREAM_URL = process.env.VERIFY_UPSTREAM_URL || "https://chatgpt.com/backend-api/me";
+const TRIAL_UPSTREAM_URL = process.env.TRIAL_UPSTREAM_URL || "https://chatgpt.com/backend-api/accounts/check_trial_eligibility";
+const TRIAL_UPSTREAM_METHOD = (process.env.TRIAL_UPSTREAM_METHOD || "GET").toUpperCase();
 const ALLOWED_ORIGINS = new Set((process.env.ALLOWED_ORIGINS || "http://localhost:4173,http://127.0.0.1:4173").split(",").map((value) => value.trim()).filter(Boolean));
 const RATE_LIMIT_WINDOW_MS = 60_000;
 const RATE_LIMIT_MAX = Number(process.env.RATE_LIMIT_MAX || 30);
@@ -352,6 +354,60 @@ function extractAccountFromJwt(payload) {
   };
 }
 
+function boolValue(...values) {
+  for (const value of values) {
+    if (typeof value === "boolean") return value;
+    if (typeof value === "string" && /^(true|false)$/i.test(value.trim())) return value.trim().toLowerCase() === "true";
+  }
+  return undefined;
+}
+
+function extractTrialEligibility(payload) {
+  const root = payload && typeof payload === "object" ? payload : {};
+  const nested = [root.trial, root.data, root.result, root.eligibility].filter((value) => value && typeof value === "object");
+  return boolValue(
+    root.eligible, root.is_eligible, root.trial_eligible, root.eligible_for_trial,
+    root.can_start_trial, root.has_trial,
+    ...nested.flatMap((value) => [value.eligible, value.is_eligible, value.trial_eligible, value.eligible_for_trial, value.can_start_trial, value.has_trial])
+  );
+}
+
+async function checkTrialEligibility(accessToken, accountId) {
+  if (!TRIAL_UPSTREAM_URL) return { trial_eligible: undefined, trial_error: "试用接口未配置" };
+  try {
+    const headers = {
+      Accept: "application/json",
+      Authorization: `Bearer ${accessToken}`,
+      "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/146.0.0.0 Safari/537.36",
+    };
+    if (accountId) headers["ChatGPT-Account-Id"] = accountId;
+    const requestOptions = {
+      method: TRIAL_UPSTREAM_METHOD === "POST" ? "POST" : "GET",
+      headers,
+      signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
+    };
+    if (requestOptions.method === "POST") {
+      headers["Content-Type"] = "application/json";
+      requestOptions.body = JSON.stringify({ account_id: accountId || "" });
+    }
+    const upstream = await fetch(TRIAL_UPSTREAM_URL, requestOptions);
+    let payload = {};
+    try { payload = JSON.parse(await upstream.text()); }
+    catch { /* upstream did not return JSON */ }
+    const eligible = extractTrialEligibility(payload);
+    return {
+      trial_eligible: eligible,
+      trial_upstream_status: upstream.status,
+      trial_error: eligible === undefined ? (payload?.error || payload?.message || `试用接口未返回明确资格字段（HTTP ${upstream.status}）`) : (payload?.error || payload?.message || null),
+    };
+  } catch (error) {
+    return {
+      trial_eligible: undefined,
+      trial_error: error?.name === "TimeoutError" ? "试用资格检测超时" : "试用资格检测连接失败",
+    };
+  }
+}
+
 async function handleAccountVerify(request, response, origin) {
   if (!clientAllowed(request)) {
     json(response, 429, { ok: false, error: "请求过于频繁，请稍后重试" }, origin);
@@ -367,6 +423,7 @@ async function handleAccountVerify(request, response, origin) {
   }
 
   const accessToken = (typeof body?.access_token === "string" ? body.access_token.trim() : "");
+  const includeTrial = body?.include_trial === true;
   if (!accessToken) {
     json(response, 400, { ok: false, error: "缺少 access_token" }, origin);
     return;
@@ -405,6 +462,7 @@ async function handleAccountVerify(request, response, origin) {
       const planType = upstreamData.plan_type || jwtInfo.plan_type || "free";
       const email = upstreamData.email || jwtInfo.email || null;
       const accountId = upstreamData.account_id || jwtInfo.account_id || body?.account_id || null;
+      const trial = includeTrial ? await checkTrialEligibility(accessToken, accountId) : {};
       json(response, 200, {
         ok: true,
         active: true,
@@ -414,6 +472,7 @@ async function handleAccountVerify(request, response, origin) {
         user_id: upstreamData.user_id || jwtInfo.user_id || null,
         token_expires_at: jwtInfo.expires_at || null,
         message: `账号正常，套餐为 ${planType}`,
+        ...trial,
       }, origin);
     } else if (upstream.status === 401 || upstream.status === 403) {
       // Token is invalid — 403 usually means the account was deleted/banned
@@ -456,6 +515,33 @@ async function handleAccountVerify(request, response, origin) {
   }
 }
 
+async function handleTrialEligibility(request, response, origin) {
+  if (!clientAllowed(request)) {
+    json(response, 429, { ok: false, error: "请求过于频繁，请稍后重试" }, origin);
+    return;
+  }
+
+  let body;
+  try {
+    body = await readBody(request);
+  } catch (error) {
+    json(response, 400, { ok: false, error: error.message }, origin);
+    return;
+  }
+
+  const accessToken = typeof body?.access_token === "string" ? body.access_token.trim() : "";
+  if (!accessToken) {
+    json(response, 400, { ok: false, error: "缺少 access_token" }, origin);
+    return;
+  }
+
+  const payload = parseJwtPayload(accessToken);
+  const jwtInfo = payload ? extractAccountFromJwt(payload) : { account_id: "" };
+  const accountId = typeof body?.account_id === "string" && body.account_id.trim() ? body.account_id.trim() : jwtInfo.account_id;
+  const trial = await checkTrialEligibility(accessToken, accountId);
+  json(response, 200, { ok: true, ...trial }, origin);
+}
+
 const server = http.createServer(async (request, response) => {
   const origin = allowedOrigin(request);
   if (request.headers.origin && !origin) {
@@ -488,6 +574,10 @@ const server = http.createServer(async (request, response) => {
   }
   if (request.method === "POST" && url.pathname === "/api/account/verify") {
     await handleAccountVerify(request, response, origin);
+    return;
+  }
+  if (request.method === "POST" && url.pathname === "/api/account/trial-eligibility") {
+    await handleTrialEligibility(request, response, origin);
     return;
   }
   if (request.method === "POST" && url.pathname === "/api/visits") {

@@ -7,6 +7,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="description" content="验证 ChatGPT accessToken 或 session，检测账号是否正常以及套餐类型。">
   <meta name="verify-api-url" content="https://api.cuixiaoxuan.com/api/account/verify">
+  <meta name="trial-api-url" content="https://api.cuixiaoxuan.com/api/account/trial-eligibility">
   <title>AT验活 · ChatGPT 账号验证</title>
   <style>
     :root {
@@ -43,7 +44,7 @@
     button { cursor: pointer; }
 
     .shell {
-      width: min(680px, calc(100% - 28px));
+      width: min(900px, calc(100% - 28px));
       padding: 28px 0;
     }
 
@@ -155,6 +156,18 @@
       line-height: 1.55;
     }
 
+    .input-meta {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      margin-top: 9px;
+      color: var(--muted);
+      font-size: 11px;
+    }
+
+    .input-meta strong { color: var(--teal-dark); font-weight: 850; }
+
     .actions {
       display: grid;
       grid-template-columns: 1fr auto;
@@ -184,6 +197,14 @@
 
     .button.primary:hover:not(:disabled) { background: var(--teal-dark); }
     .button.secondary:hover:not(:disabled) { border-color: #b6cbc7; }
+
+    .button.ghost {
+      border-color: #b9d9d5;
+      background: var(--teal-soft);
+      color: var(--teal-dark);
+    }
+
+    .button.ghost:hover:not(:disabled) { border-color: var(--teal); background: #d5ece8; }
 
     .status {
       min-height: 24px;
@@ -286,6 +307,10 @@
       font-weight: 850;
     }
 
+    .trial-status.eligible { color: var(--green); }
+    .trial-status.ineligible { color: var(--red); }
+    .trial-status.unknown { color: var(--orange); }
+
     .plan-badge {
       display: inline-block;
       padding: 4px 14px;
@@ -341,6 +366,184 @@
       word-break: break-all;
     }
 
+    /* Batch result */
+    .batch-result {
+      display: none;
+      margin-top: 18px;
+      overflow: hidden;
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      background: #fbfdfd;
+    }
+
+    .batch-result.visible { display: block; }
+
+    .batch-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+      padding: 16px 18px;
+      border-bottom: 1px solid var(--line);
+      background: #f4faf8;
+    }
+
+    .batch-head-copy { min-width: 0; }
+    .batch-title { color: var(--ink); font-size: 16px; font-weight: 900; }
+    .batch-subtitle { margin-top: 3px; color: var(--muted); font-size: 12px; }
+
+    .batch-stats {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 8px;
+      padding: 14px 18px 0;
+    }
+
+    .batch-stat {
+      padding: 10px 12px;
+      border: 1px solid #e3ecea;
+      border-radius: 9px;
+      background: white;
+    }
+
+    .batch-stat-label { color: var(--muted); font-size: 10px; font-weight: 800; }
+    .batch-stat-value { margin-top: 3px; color: var(--ink); font-size: 18px; font-weight: 900; }
+    .batch-stat.success .batch-stat-value { color: var(--green); }
+    .batch-stat.error .batch-stat-value { color: var(--red); }
+    .batch-stat.warning .batch-stat-value { color: var(--orange); }
+    .batch-stat.final .batch-stat-value { color: var(--teal); }
+
+    .batch-output {
+      margin: 14px 18px 0;
+      padding: 14px;
+      border: 1px solid #b9d9d5;
+      border-radius: 10px;
+      background: var(--teal-soft);
+    }
+
+    .batch-output-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      margin-bottom: 9px;
+    }
+
+    .batch-output-title { color: var(--teal-dark); font-size: 13px; font-weight: 900; }
+    .batch-output-title span { color: var(--green); }
+
+    .usable-tokens {
+      display: block;
+      width: 100%;
+      min-height: 84px;
+      max-height: 190px;
+      padding: 10px 11px;
+      resize: vertical;
+      border: 1px solid #b9d9d5;
+      border-radius: 8px;
+      outline: none;
+      background: rgba(255,255,255,.82);
+      color: #245c58;
+      font-family: ui-monospace, SFMono-Regular, Consolas, "Liberation Mono", monospace;
+      font-size: 11px;
+      line-height: 1.55;
+    }
+
+    .usable-tokens::placeholder { color: #6f9d98; }
+
+    .batch-list {
+      display: grid;
+      gap: 8px;
+      padding: 14px 18px 18px;
+    }
+
+    .batch-item {
+      display: grid;
+      grid-template-columns: auto 1fr auto;
+      align-items: center;
+      gap: 11px;
+      min-width: 0;
+      padding: 11px 12px;
+      border: 1px solid #e3ecea;
+      border-left: 4px solid #cbd9d7;
+      border-radius: 9px;
+      background: white;
+    }
+
+    .batch-item.active { border-color: #b9d9d5; border-left-color: var(--green); background: #f4fbf8; }
+    .batch-item.ready { border-color: #8fc9bb; border-left-color: var(--teal); background: #effaf7; }
+    .batch-item.inactive, .batch-item.ineligible, .batch-item.invalid { border-color: #dfaaa0; border-left-color: var(--red); background: #fff8f6; }
+    .batch-item.unknown, .batch-item.checking { border-color: #e7bba7; border-left-color: var(--orange); background: #fffaf7; }
+
+    .batch-index {
+      display: grid;
+      width: 30px;
+      height: 30px;
+      place-items: center;
+      border-radius: 8px;
+      background: #eef4f3;
+      color: #537077;
+      font-size: 11px;
+      font-weight: 900;
+    }
+
+    .batch-item.active .batch-index { background: #dff1e9; color: var(--green); }
+    .batch-item.ready .batch-index { background: #d5ece8; color: var(--teal); }
+    .batch-item.inactive .batch-index, .batch-item.ineligible .batch-index, .batch-item.invalid .batch-index { background: #f5d5cb; color: var(--red); }
+    .batch-item.unknown .batch-index, .batch-item.checking .batch-index { background: #ffe0cc; color: var(--orange); }
+
+    .batch-item-main { min-width: 0; }
+    .batch-item-title { color: var(--ink); font-size: 13px; font-weight: 850; }
+    .batch-item-meta {
+      margin-top: 3px;
+      overflow: hidden;
+      color: var(--muted);
+      font-size: 11px;
+      line-height: 1.45;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .batch-item-token {
+      margin-top: 4px;
+      overflow: hidden;
+      color: #527076;
+      font-family: ui-monospace, SFMono-Regular, Consolas, "Liberation Mono", monospace;
+      font-size: 10px;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .batch-checks { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 5px; }
+    .check-chip { display: inline-flex; align-items: center; gap: 4px; padding: 2px 6px; border-radius: 999px; background: #eef4f3; color: #537077; font-size: 10px; font-weight: 800; }
+    .check-chip.ok { background: #dff1e9; color: var(--green); }
+    .check-chip.bad { background: #f5d5cb; color: var(--red); }
+    .check-chip.wait { background: #ffe0cc; color: var(--orange); }
+
+    .batch-badge {
+      display: inline-flex;
+      align-items: center;
+      min-height: 26px;
+      padding: 4px 9px;
+      border-radius: 999px;
+      font-size: 11px;
+      font-weight: 900;
+      white-space: nowrap;
+    }
+
+    .batch-badge.active { background: #dff1e9; color: var(--green); }
+    .batch-badge.ready { background: #d5ece8; color: var(--teal); }
+    .batch-badge.inactive, .batch-badge.ineligible, .batch-badge.invalid { background: #f5d5cb; color: var(--red); }
+    .batch-badge.unknown, .batch-badge.checking { background: #ffe0cc; color: var(--orange); }
+    .batch-badge.pending { background: #eef4f3; color: #537077; }
+
+    .batch-empty {
+      margin: 0;
+      padding: 4px 0 0;
+      color: var(--muted);
+      font-size: 11px;
+    }
+
     .foot {
       display: flex;
       justify-content: space-between;
@@ -361,6 +564,11 @@
       .actions { grid-template-columns: 1fr; }
       .button.secondary { order: 2; }
       .result-grid { grid-template-columns: 1fr; }
+      .batch-head { align-items: stretch; flex-direction: column; }
+      .batch-stats { grid-template-columns: repeat(2, 1fr); }
+      .batch-output-head { align-items: flex-start; flex-direction: column; }
+      .batch-item { grid-template-columns: auto 1fr; }
+      .batch-item > .batch-badge { grid-column: 2; justify-self: start; }
       .foot { flex-direction: column; gap: 3px; }
     }
   </style>
@@ -382,10 +590,14 @@
       </header>
       <div class="body">
         <label for="tokenInput">ChatGPT accessToken / session JSON</label>
-        <textarea id="tokenInput" spellcheck="false" autocomplete="off" placeholder="eyJhbGciOi...&#10;&#10;也支持 Bearer eyJ... 或包含 accessToken、user、account 的完整 JSON"></textarea>
+        <textarea id="tokenInput" spellcheck="false" autocomplete="off" placeholder="单条：eyJhbGciOi...&#10;批量：每行一个 AT，支持 Bearer 前缀&#10;&#10;也支持单条完整 session JSON"></textarea>
+        <div class="input-meta">
+          <span>批量模式：每行一个 AT，空行会自动忽略</span>
+          <strong id="inputCount">0 条</strong>
+        </div>
         <p class="privacy">AT 仅用于向 OpenAI 验证账号状态；服务端不保存凭据，验证完成后即丢弃。</p>
         <div class="actions">
-          <button class="button primary" id="verifyButton" type="button">验证账号</button>
+          <button class="button primary" id="verifyButton" type="button">开始检测</button>
           <button class="button secondary" id="clearButton" type="button">清空</button>
         </div>
         <p class="status" id="status" aria-live="polite">等待粘贴 AT 或 session JSON。</p>
@@ -421,6 +633,10 @@
                 <div class="result-field-label">验证方式</div>
                 <div class="result-field-value" id="resultMethod">—</div>
               </div>
+              <div class="result-field span-2">
+                <div class="result-field-label">试用资格</div>
+                <div class="result-field-value" id="resultTrial">未检测</div>
+              </div>
             </div>
             <details class="result-raw" id="resultRawDetails">
               <summary>查看原始 JWT 解析数据</summary>
@@ -428,6 +644,31 @@
             </details>
           </div>
         </div>
+
+        <section class="batch-result" id="batchResult" aria-live="polite">
+          <header class="batch-head">
+            <div class="batch-head-copy">
+              <div class="batch-title">批量检测结果 <span id="batchProgress">0 / 0</span></div>
+              <div class="batch-subtitle" id="batchSubtitle">逐条显示验证状态，可用 AT 会自动汇总。</div>
+            </div>
+          <button class="button ghost" id="importUsableButton" type="button" disabled>导入最终可用 AT</button>
+          </header>
+          <div class="batch-stats" aria-label="批量检测统计">
+            <div class="batch-stat final"><div class="batch-stat-label">最终可用</div><div class="batch-stat-value" id="batchReadyCount">0</div></div>
+            <div class="batch-stat success"><div class="batch-stat-label">活跃</div><div class="batch-stat-value" id="batchActiveCount">0</div></div>
+            <div class="batch-stat error"><div class="batch-stat-label">无效 / 无资格</div><div class="batch-stat-value" id="batchInactiveCount">0</div></div>
+            <div class="batch-stat warning"><div class="batch-stat-label">待确认</div><div class="batch-stat-value" id="batchUnknownCount">0</div></div>
+            <div class="batch-stat"><div class="batch-stat-label">总数</div><div class="batch-stat-value" id="batchTotalCount">0</div></div>
+          </div>
+          <div class="batch-output">
+            <div class="batch-output-head">
+              <div class="batch-output-title">最终可用 AT <span id="usableCount">0 条</span></div>
+              <span class="batch-subtitle">每行一个，可直接回填输入框</span>
+            </div>
+            <textarea class="usable-tokens" id="usableTokensOutput" readonly spellcheck="false" placeholder="检测完成后，这里会显示可用 AT，每行一个"></textarea>
+          </div>
+          <div class="batch-list" id="batchList"></div>
+        </section>
       </div>
     </section>
     <footer class="foot">
@@ -442,6 +683,8 @@
 
       const verifyMetaUrl = document.querySelector('meta[name="verify-api-url"]')?.content?.trim() || "";
       const verifyApiUrl = ["localhost", "127.0.0.1"].includes(globalThis.location?.hostname) ? "http://127.0.0.1:8787/api/account/verify" : verifyMetaUrl;
+      const trialMetaUrl = document.querySelector('meta[name="trial-api-url"]')?.content?.trim() || "";
+      const trialApiUrl = ["localhost", "127.0.0.1"].includes(globalThis.location?.hostname) ? "http://127.0.0.1:8787/api/account/trial-eligibility" : trialMetaUrl;
 
       const tokenInput = document.querySelector("#tokenInput");
       const verifyButton = document.querySelector("#verifyButton");
@@ -459,6 +702,24 @@
       const resultMethod = document.querySelector("#resultMethod");
       const resultRaw = document.querySelector("#resultRaw");
       const resultRawDetails = document.querySelector("#resultRawDetails");
+      const resultTrial = document.querySelector("#resultTrial");
+      const batchResult = document.querySelector("#batchResult");
+      const batchProgress = document.querySelector("#batchProgress");
+      const batchSubtitle = document.querySelector("#batchSubtitle");
+      const batchActiveCount = document.querySelector("#batchActiveCount");
+      const batchReadyCount = document.querySelector("#batchReadyCount");
+      const batchInactiveCount = document.querySelector("#batchInactiveCount");
+      const batchUnknownCount = document.querySelector("#batchUnknownCount");
+      const batchTotalCount = document.querySelector("#batchTotalCount");
+      const batchList = document.querySelector("#batchList");
+      const usableCount = document.querySelector("#usableCount");
+      const usableTokensOutput = document.querySelector("#usableTokensOutput");
+      const importUsableButton = document.querySelector("#importUsableButton");
+      const inputCount = document.querySelector("#inputCount");
+      const BATCH_CONCURRENCY = 5;
+      let batchItems = [];
+      let batchRunning = false;
+      let batchRunId = 0;
 
       function setStatus(message, kind = "") {
         status.textContent = message;
@@ -504,6 +765,17 @@
         return { token, payload };
       }
 
+      function parseRecord(record) {
+        if (!record || typeof record !== "object" || Array.isArray(record)) throw new Error("session JSON 中没有找到账号对象");
+        const accessToken = firstText(
+          record.accessToken, record.access_token,
+          record.tokens?.accessToken, record.tokens?.access_token,
+          record.credentials?.accessToken, record.credentials?.access_token
+        );
+        if (!accessToken) throw new Error("session JSON 缺少 accessToken 字段");
+        return { ...parseToken(accessToken), record };
+      }
+
       function parseInput(raw) {
         const text = raw.trim();
         if (!text) throw new Error("请先粘贴 AT 或 session JSON");
@@ -512,18 +784,27 @@
           let parsed;
           try { parsed = JSON.parse(text); }
           catch { throw new Error("session JSON 解析失败，请检查格式"); }
-          const record = Array.isArray(parsed) ? parsed[0] : parsed;
-          if (!record || typeof record !== "object" || Array.isArray(record)) throw new Error("session JSON 中没有找到账号对象");
-          const accessToken = firstText(
-            record.accessToken, record.access_token,
-            record.tokens?.accessToken, record.tokens?.access_token,
-            record.credentials?.accessToken, record.credentials?.access_token
-          );
-          if (!accessToken) throw new Error("session JSON 缺少 accessToken 字段");
-          return { ...parseToken(accessToken), record };
+          return parseRecord(Array.isArray(parsed) ? parsed[0] : parsed);
         }
 
         return { ...parseToken(text), record: {} };
+      }
+
+      function getBatchSources(raw) {
+        const text = String(raw || "").trim();
+        if (!text) return [];
+
+        if (text.startsWith("{") || text.startsWith("[")) {
+          try {
+            const parsed = JSON.parse(text);
+            if (Array.isArray(parsed) && parsed.length > 1) return parsed.map((record) => JSON.stringify(record));
+            return [text];
+          } catch {
+            // Fall through so line-separated AT values still work if a pasted JSON block is incomplete.
+          }
+        }
+
+        return text.split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
       }
 
       function extractAccountInfo(payload, record) {
@@ -572,6 +853,13 @@
         return known.has(planType) ? planType : "unknown";
       }
 
+      function renderPlanBadge(container, planType) {
+        const badge = document.createElement("span");
+        badge.className = `plan-badge ${planBadgeClass(planType)}`;
+        badge.textContent = planLabel(planType);
+        container.replaceChildren(badge);
+      }
+
       function formatDate(date) {
         if (!date || Number.isNaN(date.getTime())) return "未提供";
         const formatter = new Intl.DateTimeFormat("zh-CN", {
@@ -580,6 +868,20 @@
           hour12: false,
         });
         return formatter.format(date);
+      }
+
+      function renderTrialResult(trial) {
+        resultTrial.className = "result-field-value trial-status";
+        if (trial?.eligible === true) {
+          resultTrial.classList.add("eligible");
+          resultTrial.textContent = "有试用资格 ✓";
+        } else if (trial?.eligible === false) {
+          resultTrial.classList.add("ineligible");
+          resultTrial.textContent = trial.error || "暂无试用资格 ✗";
+        } else {
+          resultTrial.classList.add("unknown");
+          resultTrial.textContent = trial?.error || "待确认";
+        }
       }
 
       function renderLocalResult(info) {
@@ -600,11 +902,12 @@
           : `账号正常 · 套餐：${planLabel(info.planType)}`;
 
         showResult(headClass, icon, title, sub);
-        resultPlan.innerHTML = `<span class="plan-badge ${planBadgeClass(info.planType)}">${planLabel(info.planType)}</span>`;
+        renderPlanBadge(resultPlan, info.planType);
         resultEmail.textContent = info.email || "未提供";
         resultAccountId.textContent = info.accountId || "未提供";
         resultExpiry.textContent = expiresText;
         resultMethod.textContent = "本地 JWT 解析";
+        renderTrialResult(null);
 
         const rawInfo = {
           plan_type: info.planType,
@@ -635,7 +938,7 @@
         const planType = remote.plan_type || info.planType || "free";
 
         showResult(headClass, icon, title, sub);
-        resultPlan.innerHTML = `<span class="plan-badge ${planBadgeClass(planType)}">${planLabel(planType)}</span>`;
+        renderPlanBadge(resultPlan, planType);
         resultEmail.textContent = remote.email || info.email || "未提供";
         resultAccountId.textContent = remote.account_id || info.accountId || "未提供";
 
@@ -647,6 +950,7 @@
           : "未提供";
         resultExpiry.textContent = expiresText;
         resultMethod.textContent = "服务器远程验证 (OpenAI API)";
+        renderTrialResult(null);
 
         const rawInfo = {
           verified: isActive,
@@ -673,17 +977,276 @@
           let payload;
           try { payload = await response.json(); }
           catch { payload = {}; }
-          return { ok: response.ok && payload?.ok === true, ...payload };
+          return { ok: response.ok && payload?.ok === true, httpStatus: response.status, ...payload };
         } catch {
           return null;
         }
       }
 
+      function booleanValue(...values) {
+        for (const value of values) {
+          if (typeof value === "boolean") return value;
+          if (typeof value === "string" && /^(true|false)$/i.test(value.trim())) return value.trim().toLowerCase() === "true";
+        }
+        return undefined;
+      }
+
+      function extractTrialEligibility(payload) {
+        const root = payload && typeof payload === "object" ? payload : {};
+        const nested = [root.trial, root.data, root.result, root.eligibility].filter((value) => value && typeof value === "object");
+        return booleanValue(
+          root.eligible, root.is_eligible, root.trial_eligible, root.eligible_for_trial,
+          root.can_start_trial, root.has_trial,
+          ...nested.flatMap((value) => [value.eligible, value.is_eligible, value.trial_eligible, value.eligible_for_trial, value.can_start_trial, value.has_trial])
+        );
+      }
+
+      async function verifyTrialRemotely(accessToken, accountId) {
+        if (!trialApiUrl) return null;
+        try {
+          const response = await fetch(trialApiUrl, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ access_token: accessToken, account_id: accountId || "", include_trial: true }),
+          });
+          let payload;
+          try { payload = await response.json(); }
+          catch { payload = {}; }
+          return {
+            ok: response.ok && payload?.ok !== false,
+            httpStatus: response.status,
+            eligible: extractTrialEligibility(payload),
+            error: payload?.error || payload?.message || "",
+            ...payload,
+          };
+        } catch {
+          return null;
+        }
+      }
+
+      function trialFromVerifyResponse(remote) {
+        if (!remote || !(Object.prototype.hasOwnProperty.call(remote, "trial_eligible") || Object.prototype.hasOwnProperty.call(remote, "trial_error"))) return null;
+        return { eligible: remote.trial_eligible, error: remote.trial_error || "" };
+      }
+
+      function batchStatusLabel(statusValue) {
+        return {
+          pending: "等待检测",
+          checking: "检测中",
+          ready: "最终可用",
+          active: "活跃，检测资格中",
+          inactive: "无效",
+          ineligible: "无试用资格",
+          invalid: "格式错误",
+          unknown: "待确认",
+        }[statusValue] || "待确认";
+      }
+
+      function maskToken(token) {
+        if (!token) return "未提取到 AT";
+        if (token.length <= 34) return token;
+        return `${token.slice(0, 16)}…${token.slice(-12)}`;
+      }
+
+      function classifyActiveResult(item, remote) {
+        if (!remote) {
+          item.activeStatus = "unknown";
+          item.message = verifyApiUrl ? "验证服务连接失败，暂未判定" : "未配置远程验证服务，暂未判定";
+          return;
+        }
+
+        if (remote.active === true) {
+          item.activeStatus = "active";
+          item.message = `账号正常 · 套餐：${planLabel(remote.plan_type || item.info.planType)}`;
+          return;
+        }
+
+        const upstreamStatus = Number(remote.upstream_status || remote.httpStatus || 0);
+        if (remote.active === false && (upstreamStatus === 401 || upstreamStatus === 403 || upstreamStatus === 0)) {
+          item.activeStatus = "inactive";
+          item.status = "inactive";
+          item.message = remote.error || "账号未通过验证";
+          return;
+        }
+
+        item.activeStatus = "unknown";
+        item.status = "unknown";
+        item.message = remote.error || "验证服务暂未给出明确结果";
+      }
+
+      function classifyTrialResult(item, trial) {
+        if (!trial || trial.eligible === undefined) {
+          item.trialStatus = "unknown";
+          item.status = "unknown";
+          item.message = trial?.error || (trialApiUrl ? "试用资格接口未返回明确结果" : "未配置试用资格接口");
+          return;
+        }
+        if (trial.eligible === true) {
+          item.trialStatus = "eligible";
+          item.status = "ready";
+          item.message = `${item.message} · 具备试用资格`;
+          return;
+        }
+        item.trialStatus = "ineligible";
+        item.status = "ineligible";
+        item.message = trial.error || "账号活跃，但当前没有试用资格";
+      }
+
+      function checkChip(label, state) {
+        const chip = document.createElement("span");
+        chip.className = `check-chip ${state === "active" || state === "eligible" ? "ok" : state === "inactive" || state === "ineligible" ? "bad" : "wait"}`;
+        chip.textContent = `${label} ${state === "active" || state === "eligible" ? "✓" : state === "inactive" || state === "ineligible" ? "✗" : "…"}`;
+        return chip;
+      }
+
+      function buildBatchItem(item) {
+        const row = document.createElement("article");
+        row.className = `batch-item ${item.status}`;
+
+        const index = document.createElement("span");
+        index.className = "batch-index";
+        index.textContent = String(item.index);
+
+        const main = document.createElement("div");
+        main.className = "batch-item-main";
+
+        const title = document.createElement("div");
+        title.className = "batch-item-title";
+        title.textContent = item.info
+          ? (item.remote?.email || item.info.email || item.remote?.account_id || item.info.accountId || `AT #${item.index}`)
+          : `AT #${item.index}`;
+
+        const meta = document.createElement("div");
+        meta.className = "batch-item-meta";
+        meta.textContent = item.message || (item.info ? `套餐：${planLabel(item.info.planType)}` : "正在解析输入");
+
+        const checks = document.createElement("div");
+        checks.className = "batch-checks";
+        checks.append(checkChip("活跃", item.activeStatus || item.status), checkChip("试用", item.trialStatus || "pending"));
+
+        const token = document.createElement("div");
+        token.className = "batch-item-token";
+        token.textContent = maskToken(item.token || item.source);
+
+        main.append(title, meta, checks, token);
+
+        const badge = document.createElement("span");
+        badge.className = `batch-badge ${item.status}`;
+        badge.textContent = batchStatusLabel(item.status);
+
+        row.append(index, main, badge);
+        return row;
+      }
+
+      function renderBatchView() {
+        const total = batchItems.length;
+        const ready = batchItems.filter((item) => item.status === "ready").length;
+        const active = batchItems.filter((item) => item.activeStatus === "active").length;
+        const inactive = batchItems.filter((item) => item.status === "inactive" || item.status === "ineligible" || item.status === "invalid").length;
+        const eligible = batchItems.filter((item) => item.trialStatus === "eligible").length;
+        const unknown = total - ready - inactive;
+        const finished = batchItems.filter((item) => item.status !== "pending" && item.status !== "checking").length;
+        const usefulTokens = batchItems.filter((item) => item.status === "ready" && item.token).map((item) => item.token);
+
+        batchResult.classList.toggle("visible", total > 0);
+        batchProgress.textContent = `${finished} / ${total}`;
+        batchReadyCount.textContent = String(ready);
+        batchActiveCount.textContent = String(active);
+        batchInactiveCount.textContent = String(inactive);
+        batchUnknownCount.textContent = String(Math.max(0, unknown));
+        batchTotalCount.textContent = String(total);
+        usableCount.textContent = `${usefulTokens.length} 条`;
+        usableTokensOutput.value = usefulTokens.join("\n");
+        importUsableButton.disabled = batchRunning || usefulTokens.length === 0;
+        batchSubtitle.textContent = batchRunning
+          ? `已完成 ${finished} 条，正在并发检测剩余项目。`
+          : `检测完成：${ready} 条同时满足活跃 + 试用资格，${active} 条活跃，${eligible} 条有资格，${inactive} 条无效或无资格。`;
+        batchList.replaceChildren(...batchItems.map(buildBatchItem));
+      }
+
+      async function runBatchVerify(sources) {
+        const runId = ++batchRunId;
+        batchRunning = true;
+        verifyButton.disabled = true;
+        clearButton.disabled = true;
+        verifyButton.textContent = "批量检测中...";
+        hideResult();
+
+        batchItems = sources.map((source, index) => {
+          const item = { index: index + 1, source, token: "", info: null, remote: null, trial: null, activeStatus: "pending", trialStatus: "pending", status: "pending", message: "" };
+          try {
+            const parsed = parseInput(source);
+            item.token = parsed.token;
+            item.info = extractAccountInfo(parsed.payload, parsed.record);
+          } catch (error) {
+            item.activeStatus = "invalid";
+            item.trialStatus = "invalid";
+            item.status = "invalid";
+            item.message = error.message;
+          }
+          return item;
+        });
+        renderBatchView();
+        setStatus(`已识别 ${batchItems.length} 条，正在批量检测...`, "warning");
+
+        let nextIndex = 0;
+        async function worker() {
+          while (runId === batchRunId) {
+            const currentIndex = nextIndex++;
+            if (currentIndex >= batchItems.length) return;
+            const item = batchItems[currentIndex];
+            if (item.status === "invalid") {
+              renderBatchView();
+              continue;
+            }
+
+            item.status = "checking";
+            item.activeStatus = "checking";
+            item.trialStatus = "pending";
+            item.message = "正在请求验证服务...";
+            renderBatchView();
+            item.remote = await verifyRemotely(item.token, item.info.accountId);
+            if (runId !== batchRunId) return;
+            classifyActiveResult(item, item.remote);
+            if (item.activeStatus === "active") {
+              item.trialStatus = "checking";
+              item.message = "账号活跃，正在检测试用资格...";
+              renderBatchView();
+              item.trial = trialFromVerifyResponse(item.remote) || await verifyTrialRemotely(item.token, item.info.accountId);
+              if (runId !== batchRunId) return;
+              classifyTrialResult(item, item.trial);
+            }
+            renderBatchView();
+          }
+        }
+
+        await Promise.all(Array.from({ length: Math.min(BATCH_CONCURRENCY, batchItems.length) }, worker));
+        if (runId !== batchRunId) return;
+
+        batchRunning = false;
+        verifyButton.disabled = false;
+        clearButton.disabled = false;
+        verifyButton.textContent = "开始检测";
+        renderBatchView();
+
+        const ready = batchItems.filter((item) => item.status === "ready").length;
+        const inactive = batchItems.filter((item) => item.status === "inactive" || item.status === "ineligible" || item.status === "invalid").length;
+        const unknown = batchItems.length - ready - inactive;
+        setStatus(`批量检测完成：${ready} 条同时满足活跃 + 试用资格，${inactive} 条无效或无资格，${Math.max(0, unknown)} 条待确认。`, ready ? "success" : "warning");
+      }
+
       async function doVerify() {
+        const sources = getBatchSources(tokenInput.value);
+        if (sources.length > 1) {
+          await runBatchVerify(sources);
+          return;
+        }
+
         const originalLabel = verifyButton.textContent;
         verifyButton.disabled = true;
         verifyButton.textContent = "正在验证...";
         hideResult();
+        batchResult.classList.remove("visible");
 
         try {
           // Step 1: Parse input and extract JWT info
@@ -700,19 +1263,33 @@
             if (remote) {
               renderRemoteResult(remote, info);
               if (remote.ok && remote.active) {
-                setStatus(`验证完成：账号正常，套餐为 ${planLabel(remote.plan_type || info.planType)}。`, "success");
+                setStatus(`账号活跃，正在检测试用资格...`, "warning");
+                const trial = trialFromVerifyResponse(remote) || await verifyTrialRemotely(token, remote.account_id || info.accountId);
+                renderTrialResult(trial);
+                if (trial?.eligible === true) {
+                  setStatus(`验证完成：账号活跃且具备试用资格，套餐为 ${planLabel(remote.plan_type || info.planType)}。`, "success");
+                } else if (trial?.eligible === false) {
+                  setStatus(`账号活跃，但当前没有试用资格：${trial.error || "不满足试用条件"}。`, "error");
+                } else {
+                  setStatus(`账号活跃，但试用资格暂未确认：${trial?.error || "接口未返回明确结果"}。`, "warning");
+                }
               } else if (remote.ok && remote.active === false) {
+                renderTrialResult(null);
                 setStatus(`验证完成：账号异常 — ${remote.error || "服务器验证未通过"}。`, "error");
               } else if (remote.ok) {
+                renderTrialResult(null);
                 setStatus(`服务器验证暂不可用：${remote.error || "无法连接 OpenAI"}。已按本地 JWT 显示套餐。`, "warning");
               } else {
+                renderTrialResult(null);
                 setStatus(`验证完成：服务器返回错误 — ${remote.error || "未知错误"}。`, "error");
               }
             } else {
+              renderTrialResult(null);
               setStatus(`本地 JWT 解析完成（服务器不可用）：套餐为 ${planLabel(info.planType)}。`, "warning");
               resultMethod.textContent = "仅本地 JWT 解析（服务器未连接）";
             }
           } else {
+            renderTrialResult(null);
             setStatus(`本地 JWT 解析完成：套餐为 ${planLabel(info.planType)}。`, "success");
           }
         } catch (error) {
@@ -725,14 +1302,37 @@
       }
 
       function clearAll() {
+        batchRunId += 1;
+        batchRunning = false;
+        batchItems = [];
         tokenInput.value = "";
         hideResult();
+        batchResult.classList.remove("visible");
+        usableTokensOutput.value = "";
+        importUsableButton.disabled = true;
+        verifyButton.disabled = false;
+        clearButton.disabled = false;
+        verifyButton.textContent = "开始检测";
+        inputCount.textContent = "0 条";
         setStatus("等待粘贴 AT 或 session JSON。");
         tokenInput.focus();
       }
 
       verifyButton.addEventListener("click", doVerify);
       clearButton.addEventListener("click", clearAll);
+      importUsableButton.addEventListener("click", () => {
+        const usefulTokens = batchItems.filter((item) => item.status === "ready" && item.token).map((item) => item.token);
+        if (!usefulTokens.length) return;
+        tokenInput.value = usefulTokens.join("\n");
+        inputCount.textContent = `${usefulTokens.length} 条`;
+        setStatus(`已导入 ${usefulTokens.length} 条最终可用 AT，可继续转换或复制。`, "success");
+        tokenInput.focus();
+      });
+
+      tokenInput.addEventListener("input", () => {
+        const sources = getBatchSources(tokenInput.value);
+        inputCount.textContent = `${sources.length} 条`;
+      });
 
       // Allow Enter to submit (but Shift+Enter for newline)
       tokenInput.addEventListener("keydown", (event) => {
