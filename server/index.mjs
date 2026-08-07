@@ -18,7 +18,7 @@ const AGENT_HARNESS_ID = process.env.AGENT_HARNESS_ID || "codex-cli";
 const AGENT_RUNNING_LOCATION = process.env.AGENT_RUNNING_LOCATION || "local";
 const VERIFY_UPSTREAM_URL = process.env.VERIFY_UPSTREAM_URL || "https://chatgpt.com/backend-api/me";
 const TRIAL_UPSTREAM_URL = process.env.TRIAL_UPSTREAM_URL || "https://chatgpt.com/backend-api/accounts/check_trial_eligibility";
-const TRIAL_UPSTREAM_METHOD = (process.env.TRIAL_UPSTREAM_METHOD || "GET").toUpperCase();
+const TRIAL_UPSTREAM_METHOD = (process.env.TRIAL_UPSTREAM_METHOD || "POST").toUpperCase();
 const ALLOWED_ORIGINS = new Set((process.env.ALLOWED_ORIGINS || "http://localhost:4173,http://127.0.0.1:4173").split(",").map((value) => value.trim()).filter(Boolean));
 const RATE_LIMIT_WINDOW_MS = 60_000;
 const RATE_LIMIT_MAX = Number(process.env.RATE_LIMIT_MAX || 30);
