@@ -7,6 +7,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="description" content="验证 ChatGPT accessToken 或 session，检测账号是否正常以及套餐类型。">
   <meta name="verify-api-url" content="https://api.cuixiaoxuan.com/api/account/verify">
+  <meta name="verify-batch-api-url" content="https://api.cuixiaoxuan.com/api/account/verify-batch">
   <meta name="trial-api-url" content="https://api.cuixiaoxuan.com/api/account/trial-eligibility">
   <title>AT验活 · ChatGPT 账号验证</title>
   <style>
@@ -683,6 +684,8 @@
 
       const verifyMetaUrl = document.querySelector('meta[name="verify-api-url"]')?.content?.trim() || "";
       const verifyApiUrl = ["localhost", "127.0.0.1"].includes(globalThis.location?.hostname) ? "http://127.0.0.1:8787/api/account/verify" : verifyMetaUrl;
+      const verifyBatchMetaUrl = document.querySelector('meta[name="verify-batch-api-url"]')?.content?.trim() || "";
+      const verifyBatchApiUrl = ["localhost", "127.0.0.1"].includes(globalThis.location?.hostname) ? "http://127.0.0.1:8787/api/account/verify-batch" : verifyBatchMetaUrl;
       const trialMetaUrl = document.querySelector('meta[name="trial-api-url"]')?.content?.trim() || "";
       const trialApiUrl = ["localhost", "127.0.0.1"].includes(globalThis.location?.hostname) ? "http://127.0.0.1:8787/api/account/trial-eligibility" : trialMetaUrl;
 
@@ -983,6 +986,23 @@
         }
       }
 
+      async function verifyBatchRemotely(accounts) {
+        if (!verifyBatchApiUrl) return null;
+        try {
+          const response = await fetch(verifyBatchApiUrl, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ accounts, include_trial: true }),
+          });
+          let payload;
+          try { payload = await response.json(); }
+          catch { payload = {}; }
+          return { ok: response.ok && payload?.ok === true, httpStatus: response.status, ...payload };
+        } catch {
+          return null;
+        }
+      }
+
       function booleanValue(...values) {
         for (const value of values) {
           if (typeof value === "boolean") return value;
@@ -1189,39 +1209,40 @@
         renderBatchView();
         setStatus(`已识别 ${batchItems.length} 条，正在批量检测...`, "warning");
 
-        let nextIndex = 0;
-        async function worker() {
-          while (runId === batchRunId) {
-            const currentIndex = nextIndex++;
-            if (currentIndex >= batchItems.length) return;
-            const item = batchItems[currentIndex];
-            if (item.status === "invalid") {
-              renderBatchView();
-              continue;
-            }
+        const validItems = batchItems.filter((item) => item.status !== "invalid");
+        validItems.forEach((item) => {
+          item.status = "checking";
+          item.activeStatus = "checking";
+          item.trialStatus = "pending";
+          item.message = "正在通过批量接口检测...";
+        });
+        renderBatchView();
 
-            item.status = "checking";
-            item.activeStatus = "checking";
-            item.trialStatus = "pending";
-            item.message = "正在请求验证服务...";
-            renderBatchView();
-            item.remote = await verifyRemotely(item.token, item.info.accountId);
-            if (runId !== batchRunId) return;
-            classifyActiveResult(item, item.remote);
+        const batch = await verifyBatchRemotely(validItems.map((item) => ({
+          access_token: item.token,
+          account_id: item.info.accountId || "",
+        })));
+        if (runId !== batchRunId) return;
+
+        if (!batch?.results || !Array.isArray(batch.results)) {
+          validItems.forEach((item) => {
+            item.status = "unknown";
+            item.activeStatus = "unknown";
+            item.trialStatus = "unknown";
+            item.message = batch?.error || "批量接口没有返回逐条结果";
+          });
+        } else {
+          batch.results.forEach((remote, resultIndex) => {
+            const item = validItems[Number(remote.index) - 1] || validItems[resultIndex];
+            if (!item) return;
+            item.remote = remote;
+            classifyActiveResult(item, remote);
             if (item.activeStatus === "active") {
-              item.trialStatus = "checking";
-              item.message = "账号活跃，正在检测试用资格...";
-              renderBatchView();
-              item.trial = trialFromVerifyResponse(item.remote) || await verifyTrialRemotely(item.token, item.info.accountId);
-              if (runId !== batchRunId) return;
+              item.trial = trialFromVerifyResponse(remote);
               classifyTrialResult(item, item.trial);
             }
-            renderBatchView();
-          }
+          });
         }
-
-        await Promise.all(Array.from({ length: Math.min(BATCH_CONCURRENCY, batchItems.length) }, worker));
-        if (runId !== batchRunId) return;
 
         batchRunning = false;
         verifyButton.disabled = false;
