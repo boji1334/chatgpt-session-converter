@@ -176,6 +176,42 @@
       margin-top: 18px;
     }
 
+    .split-actions {
+      display: flex;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 9px;
+      margin-top: 10px;
+    }
+
+    .split-size {
+      display: inline-flex;
+      align-items: center;
+      gap: 7px;
+      margin: 0;
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 800;
+    }
+
+    .split-size input {
+      width: 76px;
+      min-height: 40px;
+      padding: 8px 9px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      outline: none;
+      background: white;
+      color: var(--ink);
+      font: inherit;
+      font-weight: 850;
+    }
+
+    .split-size input:focus {
+      border-color: var(--teal);
+      box-shadow: 0 0 0 3px rgba(28,109,106,.12);
+    }
+
     .button {
       min-height: 46px;
       padding: 10px 16px;
@@ -601,6 +637,13 @@
           <button class="button primary" id="verifyButton" type="button">开始检测</button>
           <button class="button secondary" id="clearButton" type="button">清空</button>
         </div>
+        <div class="split-actions">
+          <button class="button ghost" id="splitButton" type="button">分裂 CDK ZIP</button>
+          <label class="split-size" for="splitSize">每包
+            <input id="splitSize" type="number" min="1" max="1000" value="35" inputmode="numeric" title="每个 TXT 的行数">
+          </label>
+          <span class="batch-subtitle" id="splitStatus">仅处理非空行，分包在浏览器本地完成。</span>
+        </div>
         <p class="status" id="status" aria-live="polite">等待粘贴 AT 或 session JSON。</p>
 
         <!-- Result card -->
@@ -692,6 +735,9 @@
       const tokenInput = document.querySelector("#tokenInput");
       const verifyButton = document.querySelector("#verifyButton");
       const clearButton = document.querySelector("#clearButton");
+      const splitButton = document.querySelector("#splitButton");
+      const splitSizeInput = document.querySelector("#splitSize");
+      const splitStatus = document.querySelector("#splitStatus");
       const status = document.querySelector("#status");
       const result = document.querySelector("#result");
       const resultHead = document.querySelector("#resultHead");
@@ -1044,6 +1090,132 @@
         }
       }
 
+      function zipU16(value) {
+        const bytes = new Uint8Array(2);
+        new DataView(bytes.buffer).setUint16(0, value, true);
+        return bytes;
+      }
+
+      function zipU32(value) {
+        const bytes = new Uint8Array(4);
+        new DataView(bytes.buffer).setUint32(0, value >>> 0, true);
+        return bytes;
+      }
+
+      function joinBytes(...chunks) {
+        const total = chunks.reduce((sum, chunk) => sum + chunk.length, 0);
+        const output = new Uint8Array(total);
+        let offset = 0;
+        for (const chunk of chunks) {
+          output.set(chunk, offset);
+          offset += chunk.length;
+        }
+        return output;
+      }
+
+      const crc32Table = (() => {
+        const table = new Uint32Array(256);
+        for (let n = 0; n < 256; n += 1) {
+          let value = n;
+          for (let bit = 0; bit < 8; bit += 1) {
+            value = (value & 1) ? (0xedb88320 ^ (value >>> 1)) : (value >>> 1);
+          }
+          table[n] = value >>> 0;
+        }
+        return table;
+      })();
+
+      function crc32(bytes) {
+        let value = 0xffffffff;
+        for (const byte of bytes) value = crc32Table[(value ^ byte) & 0xff] ^ (value >>> 8);
+        return (value ^ 0xffffffff) >>> 0;
+      }
+
+      function makeZip(entries) {
+        const encoder = new TextEncoder();
+        const localParts = [];
+        const centralParts = [];
+        let localOffset = 0;
+
+        for (const entry of entries) {
+          const nameBytes = encoder.encode(entry.name);
+          const dataBytes = encoder.encode(`\ufeff${entry.text}\n`);
+          const checksum = crc32(dataBytes);
+          const localHeader = joinBytes(
+            zipU32(0x04034b50), zipU16(20), zipU16(0), zipU16(0), zipU16(0), zipU16(0),
+            zipU32(checksum), zipU32(dataBytes.length), zipU32(dataBytes.length),
+            zipU16(nameBytes.length), zipU16(0), nameBytes
+          );
+          const centralHeader = joinBytes(
+            zipU32(0x02014b50), zipU16(20), zipU16(20), zipU16(0), zipU16(0), zipU16(0), zipU16(0),
+            zipU32(checksum), zipU32(dataBytes.length), zipU32(dataBytes.length),
+            zipU16(nameBytes.length), zipU16(0), zipU16(0), zipU16(0), zipU16(0),
+            zipU32(0), zipU32(localOffset), nameBytes
+          );
+          localParts.push(localHeader, dataBytes);
+          centralParts.push(centralHeader);
+          localOffset += localHeader.length + dataBytes.length;
+        }
+
+        const localData = joinBytes(...localParts);
+        const centralData = joinBytes(...centralParts);
+        const endRecord = joinBytes(
+          zipU32(0x06054b50), zipU16(0), zipU16(0), zipU16(entries.length), zipU16(entries.length),
+          zipU32(centralData.length), zipU32(localData.length), zipU16(0)
+        );
+        return joinBytes(localData, centralData, endRecord);
+      }
+
+      function downloadZip(filename, bytes) {
+        const url = URL.createObjectURL(new Blob([bytes], { type: "application/zip" }));
+        const anchor = document.createElement("a");
+        anchor.href = url;
+        anchor.download = filename;
+        document.body.appendChild(anchor);
+        anchor.click();
+        anchor.remove();
+        setTimeout(() => URL.revokeObjectURL(url), 1000);
+      }
+
+      function splitCdkLocally() {
+        const lines = tokenInput.value.split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
+        const chunkSize = Number.parseInt(splitSizeInput.value, 10);
+        if (!Number.isInteger(chunkSize) || chunkSize < 1 || chunkSize > 1000) {
+          splitStatus.textContent = "每包数量必须是 1 到 1000 之间的整数。";
+          setStatus("分裂失败：每包数量必须是 1 到 1000 之间的整数。", "error");
+          return;
+        }
+        if (!lines.length) {
+          splitStatus.textContent = "没有可分裂的非空行。";
+          setStatus("分裂失败：没有可分裂的非空行。", "error");
+          return;
+        }
+
+        const entries = [];
+        let fullIndex = 0;
+        for (let start = 0; start < lines.length; start += chunkSize) {
+          const chunk = lines.slice(start, start + chunkSize);
+          const filename = chunk.length === chunkSize
+            ? `${chunkSize}-${++fullIndex}.txt`
+            : `${chunk.length}.txt`;
+          entries.push({ name: filename, text: chunk.join("\n") });
+        }
+
+        splitButton.disabled = true;
+        splitStatus.textContent = "正在生成 ZIP...";
+        try {
+          const zipBytes = makeZip(entries);
+          downloadZip(`cdk_split_${lines.length}_${chunkSize}.zip`, zipBytes);
+          splitStatus.textContent = `已生成 ${entries.length} 个 TXT · ${lines.length} 条 · 每包 ${chunkSize} 条`;
+          setStatus(`分裂完成：共 ${lines.length} 条，按 ${chunkSize} 条一组，生成 ${entries.length} 个 TXT，ZIP 已下载。`, "success");
+        } catch (error) {
+          splitStatus.textContent = "ZIP 生成失败";
+          setStatus(`分裂失败：${error.message || error}`, "error");
+        } finally {
+          splitButton.disabled = false;
+        }
+      }
+
       function trialFromVerifyResponse(remote) {
         if (!remote || !(Object.prototype.hasOwnProperty.call(remote, "trial_eligible") || Object.prototype.hasOwnProperty.call(remote, "trial_error"))) return null;
         return { eligible: remote.trial_eligible, error: remote.trial_error || "" };
@@ -1341,6 +1513,7 @@
 
       verifyButton.addEventListener("click", doVerify);
       clearButton.addEventListener("click", clearAll);
+      splitButton.addEventListener("click", splitCdkLocally);
       importUsableButton.addEventListener("click", () => {
         const usefulTokens = batchItems.filter((item) => item.status === "ready" && item.token).map((item) => item.token);
         if (!usefulTokens.length) return;
