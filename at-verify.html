@@ -31,8 +31,6 @@
     body {
       margin: 0;
       min-height: 100vh;
-      display: grid;
-      place-items: center;
       color: var(--ink);
       background:
         radial-gradient(circle at 18% 5%, rgba(255,255,255,.96), transparent 34%),
@@ -45,11 +43,12 @@
     button { cursor: pointer; }
 
     .shell {
-      width: min(900px, calc(100% - 28px));
-      padding: 28px 0;
+      width: min(1480px, calc(100% - 48px));
+      margin: 0 auto;
+      padding: 22px 0 28px;
     }
 
-    .page-nav { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin: 0 2px 16px; }
+    .page-nav { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin: 0 2px 14px; }
 
     .back {
       display: inline-block;
@@ -86,14 +85,14 @@
 
     .card {
       overflow: hidden;
-      border: 1px solid rgba(203,219,216,.96);
-      border-radius: 16px;
+      border: 1px solid rgba(203,219,216,.98);
+      border-radius: 20px;
       background: rgba(255,255,255,.92);
       box-shadow: 0 28px 80px rgba(31,67,69,.13);
     }
 
     .head {
-      padding: 30px 32px 23px;
+      padding: 24px 32px 20px;
       border-bottom: 1px solid var(--line);
     }
 
@@ -107,20 +106,144 @@
     }
 
     h1 {
-      margin: 0 0 10px;
-      font-size: clamp(32px, 7vw, 48px);
-      line-height: 1.02;
+      margin: 0 0 7px;
+      font-size: clamp(32px, 5vw, 44px);
+      line-height: 1.05;
       letter-spacing: -.04em;
     }
 
     .lead {
+      max-width: 760px;
       margin: 0;
       color: var(--muted);
       font-size: 14px;
-      line-height: 1.65;
+      line-height: 1.55;
     }
 
-    .body { padding: 25px 32px 30px; }
+    .body { padding: 20px 24px 24px; }
+
+    .workspace-grid {
+      display: grid;
+      grid-template-columns: minmax(360px, .72fr) minmax(620px, 1.28fr);
+      align-items: start;
+      gap: 20px;
+    }
+
+    .input-panel {
+      min-width: 0;
+      padding: 20px;
+      border: 1px solid #d9e6e3;
+      border-radius: 16px;
+      background: #f7fbfa;
+    }
+
+    .output-panel { min-width: 0; }
+
+    .panel-kicker {
+      margin-bottom: 5px;
+      color: var(--teal);
+      font-size: 10px;
+      font-weight: 900;
+      letter-spacing: .14em;
+      text-transform: uppercase;
+    }
+
+    .panel-title {
+      margin: 0 0 16px;
+      color: var(--ink);
+      font-size: 18px;
+      line-height: 1.2;
+      letter-spacing: -.02em;
+    }
+
+    .output-panel-bar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      min-height: 40px;
+      padding: 0 4px 12px;
+    }
+
+    .output-panel-title {
+      margin: 0;
+      color: var(--ink);
+      font-size: 18px;
+      line-height: 1.2;
+      letter-spacing: -.02em;
+    }
+
+    .output-panel-state {
+      padding: 6px 9px;
+      border: 1px solid #cbe0dc;
+      border-radius: 8px;
+      background: #f2faf8;
+      color: var(--teal-dark);
+      font-size: 11px;
+      font-weight: 850;
+      white-space: nowrap;
+    }
+
+    .empty-output {
+      display: grid;
+      min-height: 560px;
+      place-content: center;
+      padding: 42px;
+      border: 1px dashed #b8d5d0;
+      border-radius: 16px;
+      background:
+        linear-gradient(145deg, rgba(255,255,255,.86), rgba(240,249,247,.82)),
+        #f8fcfb;
+      text-align: center;
+    }
+
+    .empty-output-mark {
+      display: grid;
+      width: 48px;
+      height: 48px;
+      margin: 0 auto 16px;
+      place-items: center;
+      border-radius: 12px;
+      background: var(--teal);
+      color: white;
+      font-size: 16px;
+      font-weight: 900;
+      box-shadow: 0 10px 22px rgba(28,109,106,.18);
+    }
+
+    .empty-output h3 {
+      margin: 0;
+      color: var(--ink);
+      font-size: 20px;
+    }
+
+    .empty-output p {
+      max-width: 430px;
+      margin: 9px auto 0;
+      color: var(--muted);
+      font-size: 13px;
+      line-height: 1.6;
+    }
+
+    .empty-tips {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 8px;
+      margin-top: 24px;
+      text-align: left;
+    }
+
+    .empty-tip {
+      display: grid;
+      gap: 4px;
+      padding: 11px;
+      border: 1px solid #d9e6e3;
+      border-radius: 10px;
+      background: white;
+    }
+
+    .empty-tip strong { color: var(--teal); font-size: 11px; }
+    .empty-tip span { color: #527076; font-size: 11px; line-height: 1.4; }
 
     label {
       display: block;
@@ -132,7 +255,7 @@
 
     textarea {
       width: 100%;
-      min-height: 190px;
+      min-height: 300px;
       padding: 14px;
       resize: vertical;
       border: 1px solid var(--line);
@@ -170,14 +293,13 @@
     .input-meta strong { color: var(--teal-dark); font-weight: 850; }
 
     .actions {
-      display: flex;
-      align-items: center;
-      flex-wrap: wrap;
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
       gap: 9px;
       margin-top: 18px;
     }
 
-    .actions .primary { flex: 1 1 240px; }
+    .actions .primary { grid-column: 1 / -1; }
 
     .split-actions {
       display: flex;
@@ -264,7 +386,7 @@
     /* Result card */
     .result {
       display: none;
-      margin-top: 18px;
+      margin-top: 0;
       overflow: hidden;
       border: 1px solid var(--line);
       border-radius: 12px;
@@ -312,7 +434,7 @@
 
     .result-grid {
       display: grid;
-      grid-template-columns: 1fr 1fr;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
       gap: 10px;
     }
 
@@ -409,7 +531,7 @@
     /* Batch result */
     .batch-result {
       display: none;
-      margin-top: 18px;
+      margin-top: 14px;
       overflow: hidden;
       border: 1px solid var(--line);
       border-radius: 12px;
@@ -434,7 +556,7 @@
 
     .batch-stats {
       display: grid;
-      grid-template-columns: repeat(4, 1fr);
+      grid-template-columns: repeat(5, minmax(0, 1fr));
       gap: 8px;
       padding: 14px 18px 0;
     }
@@ -493,14 +615,16 @@
 
     .batch-list {
       display: grid;
-      gap: 8px;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      align-items: stretch;
+      gap: 10px;
       padding: 14px 18px 18px;
     }
 
     .batch-item {
       display: grid;
       grid-template-columns: auto 1fr auto;
-      align-items: center;
+      align-items: start;
       gap: 11px;
       min-width: 0;
       padding: 11px 12px;
@@ -541,7 +665,9 @@
       font-size: 11px;
       line-height: 1.45;
       text-overflow: ellipsis;
-      white-space: nowrap;
+      display: -webkit-box;
+      -webkit-box-orient: vertical;
+      -webkit-line-clamp: 2;
     }
 
     .batch-item-token {
@@ -566,10 +692,14 @@
       min-height: 26px;
       padding: 4px 9px;
       border-radius: 999px;
-      font-size: 11px;
+      max-width: 116px;
+      font-size: 10px;
       font-weight: 900;
-      white-space: nowrap;
+      line-height: 1.25;
+      text-align: center;
     }
+
+    .output-panel:has(.result.visible, .batch-result.visible) .empty-output { display: none; }
 
     .batch-badge.active { background: #dff1e9; color: var(--green); }
     .batch-badge.ready { background: #d5ece8; color: var(--teal); }
@@ -597,10 +727,15 @@
     .foot a { color: var(--teal-dark); font-weight: 750; text-decoration: none; }
 
     @media (max-width: 560px) {
-      body { display: block; }
-      .shell { margin: 0 auto; }
+      .shell { width: min(100% - 24px, 720px); }
       .page-nav { align-items: flex-start; flex-direction: column; }
       .head, .body { padding-left: 20px; padding-right: 20px; }
+      .workspace-grid { grid-template-columns: 1fr; }
+      .input-panel { padding: 16px; }
+      .output-panel-bar { align-items: flex-start; flex-direction: column; }
+      .empty-output { min-height: 360px; padding: 28px 20px; }
+      .empty-tips { grid-template-columns: 1fr; }
+      textarea { min-height: 240px; }
       .actions { align-items: stretch; }
       .actions .button { flex: 1 1 100%; }
       .button.secondary { order: 2; }
@@ -608,9 +743,16 @@
       .batch-head { align-items: stretch; flex-direction: column; }
       .batch-stats { grid-template-columns: repeat(2, 1fr); }
       .batch-output-head { align-items: flex-start; flex-direction: column; }
-      .batch-item { grid-template-columns: auto 1fr; }
-      .batch-item > .batch-badge { grid-column: 2; justify-self: start; }
+      .batch-list { grid-template-columns: 1fr; }
+      .batch-item { grid-template-columns: auto 1fr auto; }
       .foot { flex-direction: column; gap: 3px; }
+    }
+
+    @media (min-width: 561px) and (max-width: 1120px) {
+      .workspace-grid { grid-template-columns: minmax(320px, .78fr) minmax(0, 1.22fr); }
+      .batch-list { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .batch-stats { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+      .result-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
     }
   </style>
 </head>
@@ -630,6 +772,10 @@
         <p class="lead">粘贴 ChatGPT accessToken 或完整 session JSON，验证账号是否正常并查看套餐类型。</p>
       </header>
       <div class="body">
+        <div class="workspace-grid">
+          <section class="input-panel" aria-labelledby="inputPanelTitle">
+            <div class="panel-kicker">Input / Batch</div>
+            <h2 class="panel-title" id="inputPanelTitle">粘贴账号数据</h2>
         <label for="tokenInput">ChatGPT accessToken / session JSON</label>
         <textarea id="tokenInput" spellcheck="false" autocomplete="off" placeholder="单条：eyJhbGciOi...&#10;批量：每行一个 AT，支持 Bearer 前缀&#10;也支持：邮箱----密码----2FA----AT&#10;&#10;也支持单条完整 session JSON"></textarea>
         <div class="input-meta">
@@ -653,6 +799,23 @@
           <span class="batch-subtitle" id="splitStatus">仅处理非空行，分包在浏览器本地完成。</span>
         </div>
         <p class="status" id="status" aria-live="polite">等待粘贴 AT 或 session JSON。</p>
+
+          </section>
+          <section class="output-panel" aria-labelledby="outputPanelTitle">
+            <div class="output-panel-bar">
+              <h2 class="output-panel-title" id="outputPanelTitle">检测结果</h2>
+              <span class="output-panel-state">本地整理，实时反馈</span>
+            </div>
+            <div class="empty-output" aria-live="polite">
+              <span class="empty-output-mark" aria-hidden="true">01</span>
+              <h3>结果会显示在这里</h3>
+              <p>粘贴一条或多条 AT 后开始检测。批量账号会自动排成多列，减少滚动，也方便快速定位状态。</p>
+              <div class="empty-tips" aria-label="使用提示">
+                <div class="empty-tip"><strong>01</strong><span>每行一个 AT，支持批量</span></div>
+                <div class="empty-tip"><strong>02</strong><span>可导出 CSV、Plus 和优惠 AT</span></div>
+                <div class="empty-tip"><strong>03</strong><span>最终可用账号可一键回填</span></div>
+              </div>
+            </div>
 
         <!-- Result card -->
         <div class="result" id="result" aria-live="polite">
@@ -721,6 +884,8 @@
           </div>
           <div class="batch-list" id="batchList"></div>
         </section>
+          </section>
+        </div>
       </div>
     </section>
     <footer class="foot">
