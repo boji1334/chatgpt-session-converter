@@ -39,13 +39,14 @@
         linear-gradient(135deg, rgba(255,255,255,.38), transparent 55%),
         #edf5f3;
       font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      font-size: 16px;
     }
 
     button, textarea { font: inherit; }
     button { cursor: pointer; }
 
     .shell {
-      width: min(1480px, calc(100% - 48px));
+      width: min(1680px, calc(100% - 48px));
       margin: 0 auto;
       padding: 22px 0 28px;
     }
@@ -55,7 +56,7 @@
     .back {
       display: inline-block;
       color: var(--teal-dark);
-      font-size: 13px;
+      font-size: 15px;
       font-weight: 800;
       text-decoration: none;
     }
@@ -81,8 +82,8 @@
     .github-cta:active { transform: translateY(1px); }
     .github-cta:focus-visible { outline: 3px solid rgba(28,109,106,.2); outline-offset: 2px; }
     .github-cta-copy { display: grid; gap: 1px; }
-    .github-cta-label { color: var(--muted); font-size: 11px; font-weight: 750; }
-    .github-cta strong { font-size: 13px; line-height: 1.2; white-space: nowrap; }
+    .github-cta-label { color: var(--muted); font-size: 13px; font-weight: 750; }
+    .github-cta strong { font-size: 15px; line-height: 1.2; white-space: nowrap; }
     .github-star { display: grid; width: 28px; height: 28px; place-items: center; border-radius: 8px; background: var(--teal); color: white; font-size: 14px; }
 
     .card {
@@ -118,7 +119,7 @@
       max-width: 760px;
       margin: 0;
       color: var(--muted);
-      font-size: 16px;
+      font-size: 18px;
       line-height: 1.6;
     }
 
@@ -126,7 +127,7 @@
 
     .workspace-grid {
       display: grid;
-      grid-template-columns: minmax(360px, .72fr) minmax(620px, 1.28fr);
+      grid-template-columns: minmax(430px, .68fr) minmax(760px, 1.32fr);
       align-items: start;
       gap: 20px;
     }
@@ -144,7 +145,7 @@
     .panel-kicker {
       margin-bottom: 5px;
       color: var(--teal);
-      font-size: 10px;
+      font-size: 12px;
       font-weight: 900;
       letter-spacing: .14em;
       text-transform: uppercase;
@@ -153,7 +154,7 @@
     .panel-title {
       margin: 0 0 16px;
       color: var(--ink);
-      font-size: 20px;
+      font-size: 23px;
       line-height: 1.2;
       letter-spacing: -.02em;
     }
@@ -170,7 +171,7 @@
     .output-panel-title {
       margin: 0;
       color: var(--ink);
-      font-size: 20px;
+      font-size: 23px;
       line-height: 1.2;
       letter-spacing: -.02em;
     }
@@ -181,7 +182,7 @@
       border-radius: 8px;
       background: #f2faf8;
       color: var(--teal-dark);
-      font-size: 13px;
+      font-size: 15px;
       font-weight: 850;
       white-space: nowrap;
     }
@@ -225,7 +226,7 @@
       max-width: 430px;
       margin: 9px auto 0;
       color: var(--muted);
-      font-size: 13px;
+      font-size: 15px;
       line-height: 1.6;
     }
 
@@ -246,14 +247,14 @@
       background: white;
     }
 
-    .empty-tip strong { color: var(--teal); font-size: 13px; }
-    .empty-tip span { color: #527076; font-size: 13px; line-height: 1.4; }
+    .empty-tip strong { color: var(--teal); font-size: 15px; }
+    .empty-tip span { color: #527076; font-size: 15px; line-height: 1.45; }
 
     label {
       display: block;
       margin-bottom: 8px;
       color: #35515a;
-      font-size: 14px;
+      font-size: 16px;
       font-weight: 850;
     }
 
@@ -268,7 +269,7 @@
       background: #fbfdfd;
       color: var(--ink);
       font-family: ui-monospace, SFMono-Regular, Consolas, "Liberation Mono", monospace;
-      font-size: 14px;
+      font-size: 16px;
       line-height: 1.65;
     }
 
@@ -280,7 +281,7 @@
     .privacy {
       margin: 9px 0 0;
       color: var(--muted);
-      font-size: 14px;
+      font-size: 15px;
       line-height: 1.55;
     }
 
@@ -291,7 +292,7 @@
       gap: 12px;
       margin-top: 9px;
       color: var(--muted);
-      font-size: 13px;
+      font-size: 15px;
     }
 
     .input-meta strong { color: var(--teal-dark); font-weight: 850; }
@@ -319,7 +320,7 @@
       gap: 7px;
       margin: 0;
       color: var(--muted);
-      font-size: 14px;
+      font-size: 15px;
       font-weight: 800;
     }
 
@@ -342,13 +343,13 @@
     }
 
     .button {
-      min-height: 46px;
+      min-height: 50px;
       padding: 10px 16px;
       border: 1px solid var(--line);
       border-radius: 9px;
       background: white;
       color: #35515a;
-      font-size: 15px;
+      font-size: 17px;
       font-weight: 900;
     }
 
@@ -379,7 +380,7 @@
       border: 1px solid transparent;
       border-radius: 8px;
       color: var(--muted);
-      font-size: 14px;
+      font-size: 16px;
       line-height: 1.55;
     }
 
@@ -398,7 +399,7 @@
       border-radius: 9px;
       background: #f1f8f6;
       color: #35515a;
-      font-size: 13px;
+      font-size: 15px;
       font-weight: 800;
     }
 
@@ -425,7 +426,7 @@
       background: #f4faf8;
     }
 
-    .subscription-dashboard-head h3 { margin: 0; color: var(--ink); font-size: 18px; }
+    .subscription-dashboard-head h3 { margin: 0; color: var(--ink); font-size: 22px; }
 
     .subscription-busy {
       display: inline-flex;
@@ -435,32 +436,32 @@
       border-radius: 999px;
       background: #ffe0cc;
       color: var(--orange);
-      font-size: 12px;
+      font-size: 14px;
       font-weight: 900;
     }
 
     .subscription-busy.ok { background: #dff1e9; color: var(--green); }
     .subscription-busy.bad { background: #f5d5cb; color: var(--red); }
 
-    .subscription-head-note { margin-left: 8px; color: var(--muted); font-size: 13px; }
+    .subscription-head-note { display: block; margin: 4px 0 0; color: var(--muted); font-size: 15px; }
 
     .subscription-stats {
       display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(112px, 1fr));
-      gap: 8px;
+      grid-template-columns: repeat(auto-fit, minmax(126px, 1fr));
+      gap: 10px;
       padding: 14px 16px 0;
     }
 
     .subscription-stat {
       min-width: 0;
-      padding: 10px 12px;
+      padding: 13px 14px;
       border: 1px solid #e3ecea;
       border-radius: 9px;
       background: white;
     }
 
-    .subscription-stat .num { color: var(--ink); font-size: 22px; font-weight: 900; }
-    .subscription-stat .name { margin-top: 2px; color: var(--muted); font-size: 12px; font-weight: 800; }
+    .subscription-stat .num { color: var(--ink); font-size: 28px; font-weight: 900; line-height: 1; }
+    .subscription-stat .name { margin-top: 6px; color: var(--muted); font-size: 14px; font-weight: 850; }
     .subscription-stat.plus .num { color: #2955c8; }
     .subscription-stat.free .num { color: var(--green); }
     .subscription-stat.promo .num { color: #b85c1a; }
@@ -479,12 +480,168 @@
       background: #f8fbfa;
       color: #3b565b;
       font-family: ui-monospace, SFMono-Regular, Consolas, "Liberation Mono", monospace;
-      font-size: 12px;
+      font-size: 14px;
       line-height: 1.55;
       white-space: pre-wrap;
     }
 
-    .subscription-table-wrap { margin-top: 14px; overflow: auto; }
+    .subscription-card-grid {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 12px;
+      padding: 14px 16px 16px;
+    }
+
+    .subscription-account-card {
+      min-width: 0;
+      padding: 15px;
+      border: 1px solid #d9e6e3;
+      border-left: 5px solid #9eb8b4;
+      border-radius: 12px;
+      background: white;
+    }
+
+    .subscription-account-card.plus { border-left-color: #3767d7; background: #f8faff; }
+    .subscription-account-card.free { border-left-color: var(--green); background: #f7fcfa; }
+    .subscription-account-card.bad { border-color: #dfaaa0; border-left-color: var(--red); background: #fff8f6; }
+    .subscription-account-card.warn { border-color: #e7bba7; border-left-color: var(--orange); background: #fffaf7; }
+
+    .subscription-card-head {
+      display: grid;
+      grid-template-columns: auto minmax(0, 1fr) auto;
+      align-items: start;
+      gap: 10px;
+    }
+
+    .subscription-card-index {
+      display: grid;
+      width: 34px;
+      height: 34px;
+      place-items: center;
+      border-radius: 9px;
+      background: #eaf2f0;
+      color: #42625f;
+      font-size: 15px;
+      font-weight: 900;
+    }
+
+    .subscription-account-card.plus .subscription-card-index { background: #e8f0ff; color: #2955c8; }
+    .subscription-account-card.free .subscription-card-index { background: #dff1e9; color: var(--green); }
+    .subscription-account-card.bad .subscription-card-index { background: #f5d5cb; color: var(--red); }
+
+    .subscription-card-identity { min-width: 0; }
+    .subscription-card-title {
+      overflow: hidden;
+      color: var(--ink);
+      font-size: 17px;
+      font-weight: 900;
+      line-height: 1.28;
+      overflow-wrap: anywhere;
+    }
+
+    .subscription-card-subtitle {
+      margin-top: 3px;
+      overflow: hidden;
+      color: var(--muted);
+      font-size: 14px;
+      line-height: 1.35;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .subscription-card-plan {
+      display: inline-flex;
+      min-height: 30px;
+      align-items: center;
+      padding: 5px 10px;
+      border-radius: 999px;
+      background: #eef4f3;
+      color: #527076;
+      font-size: 14px;
+      font-weight: 900;
+      white-space: nowrap;
+    }
+
+    .subscription-card-plan.plus { background: #e8f0ff; color: #2955c8; }
+    .subscription-card-plan.free { background: #dff1e9; color: var(--green); }
+    .subscription-card-plan.warn { background: #ffe0cc; color: var(--orange); }
+
+    .subscription-card-checks { display: flex; flex-wrap: wrap; gap: 7px; margin-top: 13px; }
+    .subscription-card-chip {
+      display: inline-flex;
+      min-height: 28px;
+      align-items: center;
+      padding: 4px 9px;
+      border-radius: 999px;
+      background: #eef4f3;
+      color: #527076;
+      font-size: 14px;
+      font-weight: 850;
+    }
+    .subscription-card-chip.ok { background: #dff1e9; color: var(--green); }
+    .subscription-card-chip.bad { background: #f5d5cb; color: var(--red); }
+    .subscription-card-chip.warn { background: #ffe0cc; color: var(--orange); }
+    .subscription-card-chip.plus { background: #e8f0ff; color: #2955c8; }
+
+    .subscription-card-meta {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 9px;
+      margin: 13px 0 0;
+    }
+    .subscription-card-meta div { min-width: 0; padding: 9px 10px; border-radius: 9px; background: rgba(237,245,243,.72); }
+    .subscription-card-meta dt { color: var(--muted); font-size: 13px; font-weight: 800; }
+    .subscription-card-meta dd { margin: 4px 0 0; color: #294248; font-size: 14px; font-weight: 800; overflow-wrap: anywhere; }
+
+    .subscription-card-error {
+      margin: 12px 0 0;
+      padding: 9px 10px;
+      border-radius: 9px;
+      background: #fff0eb;
+      color: var(--red);
+      font-size: 14px;
+      font-weight: 750;
+      line-height: 1.45;
+      overflow-wrap: anywhere;
+    }
+
+    .subscription-card-link {
+      display: inline-flex;
+      margin-top: 12px;
+      color: var(--teal-dark);
+      font-size: 14px;
+      font-weight: 900;
+      text-decoration: underline;
+      text-underline-offset: 3px;
+    }
+
+    .subscription-card-empty {
+      grid-column: 1 / -1;
+      margin: 0;
+      padding: 22px;
+      border: 1px dashed #b8d5d0;
+      border-radius: 12px;
+      color: var(--muted);
+      font-size: 16px;
+      text-align: center;
+    }
+
+    .subscription-technical {
+      margin: 0 16px 16px;
+      border: 1px solid #d9e6e3;
+      border-radius: 10px;
+      background: white;
+    }
+
+    .subscription-technical summary {
+      padding: 12px 14px;
+      color: var(--teal-dark);
+      font-size: 15px;
+      font-weight: 900;
+      cursor: pointer;
+    }
+
+    .subscription-table-wrap { overflow: auto; border-top: 1px solid #d9e6e3; }
 
     .subscription-table {
       width: 100%;
@@ -511,8 +668,8 @@
       font-weight: 900;
     }
 
-    .subscription-table td { color: #35515a; font-size: 13px; }
-    .subscription-table td.mono { color: #527076; font-family: ui-monospace, SFMono-Regular, Consolas, "Liberation Mono", monospace; font-size: 12px; }
+    .subscription-table td { color: #35515a; font-size: 14px; }
+    .subscription-table td.mono { color: #527076; font-family: ui-monospace, SFMono-Regular, Consolas, "Liberation Mono", monospace; font-size: 13px; }
 
     .subscription-badge {
       display: inline-flex;
@@ -530,7 +687,7 @@
     .subscription-badge.bad { background: #f5d5cb; color: var(--red); }
     .subscription-badge.warn, .subscription-badge.unknown { background: #ffe0cc; color: var(--orange); }
 
-    .subscription-errors { margin: 10px 16px 16px; color: var(--red); font-size: 12px; }
+    .subscription-errors { margin: 10px 16px 16px; color: var(--red); font-size: 14px; }
 
     /* Result card */
     .result {
@@ -917,16 +1074,21 @@
       .batch-head { align-items: stretch; flex-direction: column; }
       .batch-stats { grid-template-columns: repeat(2, 1fr); }
       .batch-output-head { align-items: flex-start; flex-direction: column; }
-      .batch-list { grid-template-columns: 1fr; }
+      .batch-list, .subscription-card-grid { grid-template-columns: 1fr; }
       .batch-item { grid-template-columns: auto 1fr auto; }
       .foot { flex-direction: column; gap: 3px; }
     }
 
     @media (min-width: 561px) and (max-width: 1120px) {
       .workspace-grid { grid-template-columns: minmax(320px, .78fr) minmax(0, 1.22fr); }
-      .batch-list { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .batch-list, .subscription-card-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
       .batch-stats { grid-template-columns: repeat(3, minmax(0, 1fr)); }
       .result-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    }
+
+    @media (min-width: 1121px) and (max-width: 1380px) {
+      .workspace-grid { grid-template-columns: minmax(380px, .72fr) minmax(0, 1.28fr); }
+      .subscription-card-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
     }
   </style>
 </head>
@@ -1017,16 +1179,20 @@
                 <div class="subscription-stat bad"><div class="num" id="subscriptionBad">0</div><div class="name">未验证 / 错误</div></div>
               </div>
               <pre class="subscription-log" id="subscriptionLog"></pre>
-              <div class="subscription-table-wrap">
-                <table class="subscription-table">
-                  <thead>
-                    <tr>
-                      <th>#</th><th>邮箱 / 标签</th><th>接码网址</th><th>导出行</th><th>订阅</th><th>来源</th><th>置信</th><th>backend</th><th>可用 / 封禁</th><th>首月免费</th><th>需新登录</th><th>raw plan</th><th>JWT claim</th><th>JWT exp UTC</th><th>token hash</th><th>endpoint</th><th>error</th>
-                    </tr>
-                  </thead>
-                  <tbody id="subscriptionTableBody"></tbody>
-                </table>
-              </div>
+              <div class="subscription-card-grid" id="subscriptionCards" aria-label="账号检测结果"></div>
+              <details class="subscription-technical">
+                <summary id="subscriptionTechnicalSummary">查看完整技术字段</summary>
+                <div class="subscription-table-wrap">
+                  <table class="subscription-table">
+                    <thead>
+                      <tr>
+                        <th>#</th><th>邮箱 / 标签</th><th>接码网址</th><th>导出行</th><th>订阅</th><th>来源</th><th>置信</th><th>backend</th><th>可用 / 封禁</th><th>首月免费</th><th>需新登录</th><th>raw plan</th><th>JWT claim</th><th>JWT exp UTC</th><th>token hash</th><th>endpoint</th><th>error</th>
+                      </tr>
+                    </thead>
+                    <tbody id="subscriptionTableBody"></tbody>
+                  </table>
+                </div>
+              </details>
               <p class="subscription-errors" id="subscriptionErrors" hidden></p>
             </section>
 
@@ -2117,6 +2283,8 @@
       const dashboard = document.querySelector("#subscriptionDashboard");
       const busyBadge = document.querySelector("#subscriptionBusyBadge");
       const logOutput = document.querySelector("#subscriptionLog");
+      const cardGrid = document.querySelector("#subscriptionCards");
+      const technicalSummary = document.querySelector("#subscriptionTechnicalSummary");
       const tableBody = document.querySelector("#subscriptionTableBody");
       const errorOutput = document.querySelector("#subscriptionErrors");
       const apiParseMeta = document.querySelector('meta[name="subscription-parse-api-url"]')?.content?.trim() || "";
@@ -2214,12 +2382,116 @@
         return cell;
       }
 
+      function planLabel(value) {
+        const plan = String(value || "").toLowerCase();
+        if (plan === "plus") return "Plus";
+        if (plan === "free") return "Free";
+        if (plan === "pro") return "Pro";
+        if (plan === "team") return "Team";
+        if (plan === "business") return "Business";
+        if (plan === "enterprise") return "Enterprise";
+        if (plan.startsWith("unverified")) return "未验证";
+        return value || "待查询";
+      }
+
+      function cardState(rowData, preview) {
+        const auth = String(rowData.auth_state || "").toLowerCase();
+        const hasError = Boolean(rowData.error_code || rowData.error || auth.includes("invalid") || auth.includes("expired") || auth.includes("forbidden"));
+        if (preview) return { label: "待查询", chip: "warn", card: "warn" };
+        if (rowData.account_usable === "yes") return { label: "可用", chip: "ok", card: effectiveSubscription(rowData) || "" };
+        if (rowData.account_usable === "no") return { label: "不可用", chip: "bad", card: "bad" };
+        if (auth.includes("expired")) return { label: "AT 已过期", chip: "bad", card: "bad" };
+        if (auth.includes("invalid")) return { label: "AT 无效", chip: "bad", card: "bad" };
+        if (rowData.needs_fresh_login === "yes") return { label: "需新登录", chip: "warn", card: "warn" };
+        if (hasError || effectiveSubscription(rowData).startsWith("unverified")) return { label: "未验证 / 错误", chip: "bad", card: "bad" };
+        return { label: "待确认", chip: "warn", card: "warn" };
+      }
+
+      function appendCardChip(container, label, kind = "") {
+        const chip = document.createElement("span");
+        chip.className = `subscription-card-chip${kind ? ` ${kind}` : ""}`;
+        chip.textContent = label;
+        container.appendChild(chip);
+      }
+
+      function appendCardMeta(list, label, value) {
+        const item = document.createElement("div");
+        const term = document.createElement("dt");
+        const description = document.createElement("dd");
+        term.textContent = label;
+        description.textContent = value || "—";
+        item.append(term, description);
+        list.appendChild(item);
+      }
+
+      function buildSubscriptionCard(rowData, index, preview) {
+        const subscription = effectiveSubscription(rowData);
+        const state = cardState(rowData, preview);
+        const card = document.createElement("article");
+        const planClass = subscription === "plus" || subscription === "free" ? subscription : "warn";
+        card.className = `subscription-account-card ${state.card || planClass}`;
+        card.setAttribute("aria-label", `${rowData.email || rowData.label || `账号 ${index + 1}`}，${planLabel(subscription)}`);
+
+        const head = document.createElement("div");
+        head.className = "subscription-card-head";
+        const number = document.createElement("span");
+        number.className = "subscription-card-index";
+        number.textContent = String(index + 1);
+        const identity = document.createElement("div");
+        identity.className = "subscription-card-identity";
+        const title = document.createElement("div");
+        title.className = "subscription-card-title";
+        title.textContent = rowData.email || rowData.label || `账号 ${index + 1}`;
+        const subtitle = document.createElement("div");
+        subtitle.className = "subscription-card-subtitle";
+        subtitle.textContent = rowData.account_id || rowData.token_hash || "等待账号信息";
+        identity.append(title, subtitle);
+        const plan = document.createElement("span");
+        plan.className = `subscription-card-plan ${planClass}`;
+        plan.textContent = planLabel(rowData.subscription || rowData.claim_subscription || (preview ? "待查询" : ""));
+        head.append(number, identity, plan);
+
+        const checks = document.createElement("div");
+        checks.className = "subscription-card-checks";
+        appendCardChip(checks, state.label, state.chip);
+        if (rowData.first_month_free_promo === "yes") appendCardChip(checks, "首月免费", "ok");
+        if (rowData.needs_fresh_login === "yes" && state.label !== "需新登录") appendCardChip(checks, "需新登录", "warn");
+        if (rowData.ban_state && !["not_checked", "unknown", "none"].includes(String(rowData.ban_state).toLowerCase())) {
+          appendCardChip(checks, `封禁：${rowData.ban_state}`, badgeClass(rowData.ban_state));
+        }
+
+        const metadata = document.createElement("dl");
+        metadata.className = "subscription-card-meta";
+        appendCardMeta(metadata, "检测来源", rowData.subscription_source || (preview ? "JWT 预览" : "—"));
+        appendCardMeta(metadata, "Backend", rowData.auth_state || (preview ? "未查询" : "—"));
+
+        card.append(head, checks, metadata);
+        const errorMessage = rowData.error_code || rowData.error || (rowData.needs_fresh_login === "yes" ? rowData.refresh_reason : "");
+        if (errorMessage) {
+          const error = document.createElement("p");
+          error.className = "subscription-card-error";
+          error.textContent = errorMessage;
+          card.appendChild(error);
+        }
+        if (/^https?:\/\//i.test(String(rowData.code_url || ""))) {
+          const link = document.createElement("a");
+          link.className = "subscription-card-link";
+          link.href = rowData.code_url;
+          link.target = "_blank";
+          link.rel = "noopener noreferrer";
+          link.textContent = "打开接码网址";
+          card.appendChild(link);
+        }
+        return card;
+      }
+
       function renderRows(rows, preview = false, envelope = {}) {
         currentRows = Array.isArray(rows) ? rows : [];
         dashboard.classList.add("visible");
         emptyOutput.classList.add("hidden");
         document.querySelector("#result")?.classList.remove("visible");
         document.querySelector("#batchResult")?.classList.remove("visible");
+        cardGrid.replaceChildren();
         tableBody.replaceChildren();
 
         let plus = 0;
@@ -2237,6 +2509,8 @@
           if (rowData.account_usable === "yes") usable += 1;
           if (rowData.needs_fresh_login === "yes") refresh += 1;
           if (subscription.startsWith("unverified") || String(rowData.auth_state || "").includes("expired") || String(rowData.auth_state || "").includes("invalid") || rowData.error_code) bad += 1;
+
+          cardGrid.appendChild(buildSubscriptionCard(rowData, index, preview));
 
           const tableRow = document.createElement("tr");
           appendCell(tableRow, String(index + 1));
@@ -2261,6 +2535,15 @@
           appendCell(tableRow, rowData.error_code || rowData.error || "");
           tableBody.appendChild(tableRow);
         });
+
+        if (!currentRows.length) {
+          const empty = document.createElement("p");
+          empty.className = "subscription-card-empty";
+          empty.textContent = "没有识别到可显示的 AT，请检查每行内容后再试。";
+          cardGrid.appendChild(empty);
+        }
+
+        technicalSummary.textContent = `查看完整技术字段（${currentRows.length} 条）`;
 
         statNodes.input.textContent = String(envelope.input_count ?? linesFromInput().length);
         statNodes.parsed.textContent = String(envelope.unique_count ?? currentRows.length);
@@ -2405,7 +2688,9 @@
       intercept(clearButton, () => {
         input.value = "";
         currentRows = [];
+        cardGrid.replaceChildren();
         tableBody.replaceChildren();
+        technicalSummary.textContent = "查看完整技术字段";
         dashboard.classList.remove("visible");
         emptyOutput.classList.remove("hidden");
         logOutput.textContent = "";
