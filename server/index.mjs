@@ -1,4 +1,5 @@
 import http from "node:http";
+import { spawn } from "node:child_process";
 import path from "node:path";
 import { URL } from "node:url";
 import { fileURLToPath } from "node:url";
@@ -11,6 +12,10 @@ const HOST = process.env.HOST || "127.0.0.1";
 const MAX_BODY_BYTES = Number(process.env.MAX_BODY_BYTES || 256 * 1024);
 const MAX_ACCOUNTS = Number(process.env.MAX_ACCOUNTS || 50);
 const REQUEST_TIMEOUT_MS = Number(process.env.REQUEST_TIMEOUT_MS || 15_000);
+const SUBSCRIPTION_BRIDGE_PATH = process.env.SUBSCRIPTION_BRIDGE_PATH || path.join(path.dirname(fileURLToPath(import.meta.url)), "subscription_bridge.py");
+const SUBSCRIPTION_PYTHON = process.env.SUBSCRIPTION_PYTHON || (process.platform === "win32" ? "python" : "python3");
+const SUBSCRIPTION_MAX_BODY_BYTES = Number(process.env.SUBSCRIPTION_MAX_BODY_BYTES || 20 * 1024 * 1024);
+const SUBSCRIPTION_REQUEST_TIMEOUT_MS = Number(process.env.SUBSCRIPTION_REQUEST_TIMEOUT_MS || 180_000);
 const UPSTREAM_USAGE_URL = process.env.UPSTREAM_USAGE_URL || "https://chatgpt.com/backend-api/wham/usage";
 const AGENT_REGISTER_URL = process.env.AGENT_REGISTER_URL || "https://auth.openai.com/api/accounts/v1/agent/register";
 const AGENT_VERSION = process.env.AGENT_VERSION || "0.138.0-alpha.6";
@@ -19,7 +24,7 @@ const AGENT_RUNNING_LOCATION = process.env.AGENT_RUNNING_LOCATION || "local";
 const VERIFY_UPSTREAM_URL = process.env.VERIFY_UPSTREAM_URL || "https://chatgpt.com/backend-api/me";
 const TRIAL_UPSTREAM_URL = process.env.TRIAL_UPSTREAM_URL || "https://chatgpt.com/backend-api/accounts/check_trial_eligibility/{account_id}";
 const TRIAL_UPSTREAM_METHOD = (process.env.TRIAL_UPSTREAM_METHOD || "PATCH").toUpperCase();
-const ALLOWED_ORIGINS = new Set((process.env.ALLOWED_ORIGINS || "http://localhost:4173,http://127.0.0.1:4173").split(",").map((value) => value.trim()).filter(Boolean));
+const ALLOWED_ORIGINS = new Set((process.env.ALLOWED_ORIGINS || "http://localhost:4173,http://127.0.0.1:4173,https://boji1334.github.io").split(",").map((value) => value.trim()).filter(Boolean));
 const RATE_LIMIT_WINDOW_MS = 60_000;
 const RATE_LIMIT_MAX = Number(process.env.RATE_LIMIT_MAX || 30);
 const VERIFY_BATCH_CONCURRENCY = Math.max(1, Number(process.env.VERIFY_BATCH_CONCURRENCY || 3));
@@ -73,13 +78,13 @@ function clientAllowed(request) {
   return existing.count <= RATE_LIMIT_MAX;
 }
 
-function readBody(request) {
+function readBody(request, maxBytes = MAX_BODY_BYTES) {
   return new Promise((resolve, reject) => {
     let size = 0;
     const chunks = [];
     request.on("data", (chunk) => {
       size += chunk.length;
-      if (size > MAX_BODY_BYTES) {
+      if (size > maxBytes) {
         reject(new Error("请求体过大"));
         request.destroy();
         return;
@@ -94,6 +99,53 @@ function readBody(request) {
       }
     });
     request.on("error", reject);
+  });
+}
+
+function runSubscriptionBridge(body, timeoutMs = SUBSCRIPTION_REQUEST_TIMEOUT_MS) {
+  return new Promise((resolve, reject) => {
+    const child = spawn(SUBSCRIPTION_PYTHON, [SUBSCRIPTION_BRIDGE_PATH], {
+      cwd: path.dirname(SUBSCRIPTION_BRIDGE_PATH),
+      stdio: ["pipe", "pipe", "pipe"],
+      windowsHide: true,
+    });
+    let stdout = "";
+    let stderr = "";
+    let settled = false;
+    const timer = setTimeout(() => {
+      if (settled) return;
+      settled = true;
+      child.kill();
+      reject(new Error("订阅检查服务超时"));
+    }, timeoutMs);
+    child.stdout.setEncoding("utf8");
+    child.stderr.setEncoding("utf8");
+    child.stdout.on("data", (chunk) => { stdout += chunk; });
+    child.stderr.on("data", (chunk) => { stderr += chunk; });
+    child.on("error", (error) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      reject(new Error(`订阅检查服务启动失败：${error.message}`));
+    });
+    child.on("close", (code) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      let parsed;
+      try { parsed = JSON.parse(stdout); }
+      catch { parsed = undefined; }
+      if (!parsed) {
+        reject(new Error(code ? `订阅检查服务失败（${code}）` : "订阅检查服务没有返回 JSON"));
+        return;
+      }
+      if (parsed.ok === false && parsed.error) {
+        reject(new Error(parsed.error));
+        return;
+      }
+      resolve(parsed);
+    });
+    child.stdin.end(JSON.stringify(body));
   });
 }
 
@@ -563,6 +615,29 @@ async function handleAccountVerifyBatch(request, response, origin) {
   json(response, 200, { ok: results.some((item) => item.ok === true), results }, origin);
 }
 
+async function handleSubscriptionBridge(request, response, origin, action) {
+  if (!clientAllowed(request)) {
+    json(response, 429, { ok: false, error: "订阅查询过于频繁，请稍后重试" }, origin);
+    return;
+  }
+
+  let body;
+  try {
+    body = await readBody(request, SUBSCRIPTION_MAX_BODY_BYTES);
+  } catch (error) {
+    json(response, 400, { ok: false, error: error.message }, origin);
+    return;
+  }
+
+  try {
+    const result = await runSubscriptionBridge({ ...body, action }, SUBSCRIPTION_REQUEST_TIMEOUT_MS);
+    json(response, 200, result, origin);
+  } catch (error) {
+    console.error("subscription bridge failed", error.message);
+    json(response, 502, { ok: false, error: error.message || "订阅检查服务失败" }, origin);
+  }
+}
+
 async function handleTrialEligibility(request, response, origin) {
   if (!clientAllowed(request)) {
     json(response, 429, { ok: false, error: "请求过于频繁，请稍后重试" }, origin);
@@ -626,6 +701,14 @@ const server = http.createServer(async (request, response) => {
   }
   if (request.method === "POST" && url.pathname === "/api/account/verify-batch") {
     await handleAccountVerifyBatch(request, response, origin);
+    return;
+  }
+  if (request.method === "POST" && ["/api/parse", "/api/subscription/parse"].includes(url.pathname)) {
+    await handleSubscriptionBridge(request, response, origin, "parse");
+    return;
+  }
+  if (request.method === "POST" && ["/api/check", "/api/subscription/check"].includes(url.pathname)) {
+    await handleSubscriptionBridge(request, response, origin, "check");
     return;
   }
   if (request.method === "POST" && url.pathname === "/api/account/trial-eligibility") {

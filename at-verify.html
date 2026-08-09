@@ -9,6 +9,8 @@
   <meta name="verify-api-url" content="https://api.cuixiaoxuan.com/api/account/verify">
   <meta name="verify-batch-api-url" content="https://api.cuixiaoxuan.com/api/account/verify-batch">
   <meta name="trial-api-url" content="https://api.cuixiaoxuan.com/api/account/trial-eligibility">
+  <meta name="subscription-parse-api-url" content="https://api.cuixiaoxuan.com/api/parse">
+  <meta name="subscription-check-api-url" content="https://api.cuixiaoxuan.com/api/check">
   <title>AT验活 · ChatGPT 账号验证</title>
   <style>
     :root {
@@ -197,6 +199,8 @@
       text-align: center;
     }
 
+    .empty-output.hidden { display: none; }
+
     .empty-output-mark {
       display: grid;
       width: 48px;
@@ -382,6 +386,151 @@
     .status.success { border-color: #b9d9d5; background: var(--teal-soft); color: var(--teal-dark); }
     .status.warning { border-color: #e7bba7; background: var(--orange-soft); color: var(--orange); }
     .status.error { border-color: #dfaaa0; background: #fff2ef; color: var(--red); }
+
+    .probe-option {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      min-height: 42px;
+      margin: 0;
+      padding: 7px 10px;
+      border: 1px solid #cbdedb;
+      border-radius: 9px;
+      background: #f1f8f6;
+      color: #35515a;
+      font-size: 13px;
+      font-weight: 800;
+    }
+
+    .probe-option input { width: 17px; height: 17px; accent-color: var(--teal); }
+
+    .subscription-dashboard {
+      display: none;
+      margin-top: 14px;
+      overflow: hidden;
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      background: #fbfdfd;
+    }
+
+    .subscription-dashboard.visible { display: block; }
+
+    .subscription-dashboard-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 14px 16px;
+      border-bottom: 1px solid var(--line);
+      background: #f4faf8;
+    }
+
+    .subscription-dashboard-head h3 { margin: 0; color: var(--ink); font-size: 18px; }
+
+    .subscription-busy {
+      display: inline-flex;
+      align-items: center;
+      min-height: 28px;
+      padding: 4px 9px;
+      border-radius: 999px;
+      background: #ffe0cc;
+      color: var(--orange);
+      font-size: 12px;
+      font-weight: 900;
+    }
+
+    .subscription-busy.ok { background: #dff1e9; color: var(--green); }
+    .subscription-busy.bad { background: #f5d5cb; color: var(--red); }
+
+    .subscription-head-note { margin-left: 8px; color: var(--muted); font-size: 13px; }
+
+    .subscription-stats {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(112px, 1fr));
+      gap: 8px;
+      padding: 14px 16px 0;
+    }
+
+    .subscription-stat {
+      min-width: 0;
+      padding: 10px 12px;
+      border: 1px solid #e3ecea;
+      border-radius: 9px;
+      background: white;
+    }
+
+    .subscription-stat .num { color: var(--ink); font-size: 22px; font-weight: 900; }
+    .subscription-stat .name { margin-top: 2px; color: var(--muted); font-size: 12px; font-weight: 800; }
+    .subscription-stat.plus .num { color: #2955c8; }
+    .subscription-stat.free .num { color: var(--green); }
+    .subscription-stat.promo .num { color: #b85c1a; }
+    .subscription-stat.usable .num { color: var(--teal); }
+    .subscription-stat.refresh .num { color: var(--orange); }
+    .subscription-stat.bad .num { color: var(--red); }
+
+    .subscription-log {
+      min-height: 72px;
+      max-height: 180px;
+      margin: 14px 16px 0;
+      overflow: auto;
+      padding: 10px 12px;
+      border: 1px solid #e3ecea;
+      border-radius: 9px;
+      background: #f8fbfa;
+      color: #3b565b;
+      font-family: ui-monospace, SFMono-Regular, Consolas, "Liberation Mono", monospace;
+      font-size: 12px;
+      line-height: 1.55;
+      white-space: pre-wrap;
+    }
+
+    .subscription-table-wrap { margin-top: 14px; overflow: auto; }
+
+    .subscription-table {
+      width: 100%;
+      min-width: 1560px;
+      border-collapse: collapse;
+    }
+
+    .subscription-table th,
+    .subscription-table td {
+      padding: 10px 11px;
+      border-top: 1px solid #e3ecea;
+      text-align: left;
+      vertical-align: top;
+      white-space: nowrap;
+    }
+
+    .subscription-table th {
+      position: sticky;
+      top: 0;
+      z-index: 1;
+      color: #527076;
+      background: #f1f7f5;
+      font-size: 12px;
+      font-weight: 900;
+    }
+
+    .subscription-table td { color: #35515a; font-size: 13px; }
+    .subscription-table td.mono { color: #527076; font-family: ui-monospace, SFMono-Regular, Consolas, "Liberation Mono", monospace; font-size: 12px; }
+
+    .subscription-badge {
+      display: inline-flex;
+      align-items: center;
+      min-height: 24px;
+      padding: 3px 8px;
+      border-radius: 999px;
+      font-size: 12px;
+      font-weight: 900;
+    }
+
+    .subscription-badge.plus { background: #e8f0ff; color: #2955c8; }
+    .subscription-badge.free { background: #dff1e9; color: var(--green); }
+    .subscription-badge.ok { background: #dff1e9; color: var(--green); }
+    .subscription-badge.bad { background: #f5d5cb; color: var(--red); }
+    .subscription-badge.warn, .subscription-badge.unknown { background: #ffe0cc; color: var(--orange); }
+
+    .subscription-errors { margin: 10px 16px 16px; color: var(--red); font-size: 12px; }
 
     /* Result card */
     .result {
@@ -821,6 +970,13 @@
           <label class="split-size" for="splitSize">每包
             <input id="splitSize" type="number" min="1" max="1000" value="35" inputmode="numeric" title="每个 TXT 的行数">
           </label>
+          <label class="split-size" for="concurrency">并发
+            <input id="concurrency" type="number" min="1" max="20" value="4" inputmode="numeric" title="同时检测的账号数量">
+          </label>
+          <label class="probe-option" for="probeAll">
+            <input id="probeAll" type="checkbox">
+            <span>探测全部 endpoint（较慢）</span>
+          </label>
           <span class="batch-subtitle" id="splitStatus">仅处理非空行，分包在浏览器本地完成。</span>
         </div>
         <p class="status" id="status" aria-live="polite">等待粘贴 AT 或 session JSON。</p>
@@ -841,6 +997,38 @@
                 <div class="empty-tip"><strong>03</strong><span>最终可用账号可一键回填</span></div>
               </div>
             </div>
+
+            <section class="subscription-dashboard" id="subscriptionDashboard" aria-live="polite">
+              <header class="subscription-dashboard-head">
+                <div>
+                  <h3>完整订阅检测</h3>
+                  <span class="subscription-head-note">backend 优先；失败时 fallback JWT claim</span>
+                </div>
+                <span class="subscription-busy" id="subscriptionBusyBadge">idle</span>
+              </header>
+              <div class="subscription-stats" aria-label="订阅检测统计">
+                <div class="subscription-stat"><div class="num" id="subscriptionInputLines">0</div><div class="name">输入行数</div></div>
+                <div class="subscription-stat"><div class="num" id="subscriptionParsed">0</div><div class="name">识别 AT</div></div>
+                <div class="subscription-stat plus"><div class="num" id="subscriptionPlus">0</div><div class="name">Plus</div></div>
+                <div class="subscription-stat free"><div class="num" id="subscriptionFree">0</div><div class="name">Free</div></div>
+                <div class="subscription-stat promo"><div class="num" id="subscriptionPromo">0</div><div class="name">Free 首月免费</div></div>
+                <div class="subscription-stat usable"><div class="num" id="subscriptionUsable">0</div><div class="name">可用</div></div>
+                <div class="subscription-stat refresh"><div class="num" id="subscriptionRefresh">0</div><div class="name">需新登录</div></div>
+                <div class="subscription-stat bad"><div class="num" id="subscriptionBad">0</div><div class="name">未验证 / 错误</div></div>
+              </div>
+              <pre class="subscription-log" id="subscriptionLog"></pre>
+              <div class="subscription-table-wrap">
+                <table class="subscription-table">
+                  <thead>
+                    <tr>
+                      <th>#</th><th>邮箱 / 标签</th><th>接码网址</th><th>导出行</th><th>订阅</th><th>来源</th><th>置信</th><th>backend</th><th>可用 / 封禁</th><th>首月免费</th><th>需新登录</th><th>raw plan</th><th>JWT claim</th><th>JWT exp UTC</th><th>token hash</th><th>endpoint</th><th>error</th>
+                    </tr>
+                  </thead>
+                  <tbody id="subscriptionTableBody"></tbody>
+                </table>
+              </div>
+              <p class="subscription-errors" id="subscriptionErrors" hidden></p>
+            </section>
 
         <!-- Result card -->
         <div class="result" id="result" aria-live="polite">
@@ -1907,6 +2095,340 @@
           doVerify();
         }
       });
+    })();
+  </script>
+
+  <script>
+    (() => {
+      "use strict";
+
+      const input = document.querySelector("#tokenInput");
+      const startButton = document.querySelector("#verifyButton");
+      const clearButton = document.querySelector("#clearButton");
+      const parseButton = document.querySelector("#prepareButton");
+      const exportCsvButton = document.querySelector("#exportCsvButton");
+      const exportPlusButton = document.querySelector("#exportPlusButton");
+      const exportPromoButton = document.querySelector("#exportPromoButton");
+      const concurrencyInput = document.querySelector("#concurrency");
+      const probeAllInput = document.querySelector("#probeAll");
+      const inputCount = document.querySelector("#inputCount");
+      const status = document.querySelector("#status");
+      const emptyOutput = document.querySelector(".empty-output");
+      const dashboard = document.querySelector("#subscriptionDashboard");
+      const busyBadge = document.querySelector("#subscriptionBusyBadge");
+      const logOutput = document.querySelector("#subscriptionLog");
+      const tableBody = document.querySelector("#subscriptionTableBody");
+      const errorOutput = document.querySelector("#subscriptionErrors");
+      const apiParseMeta = document.querySelector('meta[name="subscription-parse-api-url"]')?.content?.trim() || "";
+      const apiCheckMeta = document.querySelector('meta[name="subscription-check-api-url"]')?.content?.trim() || "";
+      const localHost = ["localhost", "127.0.0.1"].includes(globalThis.location?.hostname);
+      const parseApiUrl = localHost ? `${globalThis.location.origin}/api/parse` : apiParseMeta;
+      const checkApiUrl = localHost ? `${globalThis.location.origin}/api/check` : apiCheckMeta;
+      let currentRows = [];
+      let checking = false;
+
+      const statNodes = {
+        input: document.querySelector("#subscriptionInputLines"),
+        parsed: document.querySelector("#subscriptionParsed"),
+        plus: document.querySelector("#subscriptionPlus"),
+        free: document.querySelector("#subscriptionFree"),
+        promo: document.querySelector("#subscriptionPromo"),
+        usable: document.querySelector("#subscriptionUsable"),
+        refresh: document.querySelector("#subscriptionRefresh"),
+        bad: document.querySelector("#subscriptionBad"),
+      };
+
+      function linesFromInput() {
+        return String(input?.value || "").split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
+      }
+
+      function setStatus(message, kind = "") {
+        status.textContent = message;
+        status.className = `status${kind ? ` ${kind}` : ""}`;
+      }
+
+      function log(message) {
+        const now = new Date().toLocaleTimeString();
+        logOutput.textContent += `[${now}] ${message}\n`;
+        logOutput.scrollTop = logOutput.scrollHeight;
+      }
+
+      function setBusy(text, kind = "") {
+        busyBadge.textContent = text;
+        busyBadge.className = `subscription-busy${kind ? ` ${kind}` : ""}`;
+      }
+
+      function setExportState(enabled) {
+        exportCsvButton.disabled = !enabled;
+        exportPlusButton.disabled = !enabled;
+        exportPromoButton.disabled = !enabled;
+      }
+
+      function postJson(url, body, timeoutMs) {
+        const controller = new AbortController();
+        const timer = setTimeout(() => controller.abort(), timeoutMs);
+        return fetch(url, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(body),
+          signal: controller.signal,
+        }).then(async (response) => {
+          const data = await response.json().catch(() => ({}));
+          if (!response.ok) throw new Error(data.error || `HTTP ${response.status}`);
+          return data;
+        }).catch((error) => {
+          if (error?.name === "AbortError") throw new Error(`请求超时（${Math.round(timeoutMs / 1000)} 秒）`);
+          throw error;
+        }).finally(() => clearTimeout(timer));
+      }
+
+      function effectiveSubscription(row) {
+        return String(row?.subscription || row?.claim_subscription || "").toLowerCase();
+      }
+
+      function badgeClass(value, type = "") {
+        const text = String(value || "").toLowerCase();
+        if (text === "plus") return "plus";
+        if (text === "free") return "free";
+        if (text === "yes" || text === "ok") return "ok";
+        if (text === "no" || text.includes("expired") || text.includes("invalid") || text.includes("forbidden")) return "bad";
+        if (text.startsWith("unverified") || text === "pending" || text === "unknown" || text === "not_checked") return "warn";
+        return type || "unknown";
+      }
+
+      function appendCell(row, value, mono = false) {
+        const cell = document.createElement("td");
+        cell.textContent = value ?? "";
+        if (mono) cell.className = "mono";
+        row.appendChild(cell);
+        return cell;
+      }
+
+      function appendBadgeCell(row, value, type = "") {
+        const cell = document.createElement("td");
+        const badge = document.createElement("span");
+        badge.className = `subscription-badge ${badgeClass(value, type)}`;
+        badge.textContent = value || "";
+        cell.appendChild(badge);
+        row.appendChild(cell);
+        return cell;
+      }
+
+      function renderRows(rows, preview = false, envelope = {}) {
+        currentRows = Array.isArray(rows) ? rows : [];
+        dashboard.classList.add("visible");
+        emptyOutput.classList.add("hidden");
+        document.querySelector("#result")?.classList.remove("visible");
+        document.querySelector("#batchResult")?.classList.remove("visible");
+        tableBody.replaceChildren();
+
+        let plus = 0;
+        let free = 0;
+        let promo = 0;
+        let usable = 0;
+        let refresh = 0;
+        let bad = 0;
+
+        currentRows.forEach((rowData, index) => {
+          const subscription = effectiveSubscription(rowData);
+          if (subscription === "plus") plus += 1;
+          if (subscription === "free") free += 1;
+          if (subscription === "free" && rowData.first_month_free_promo === "yes") promo += 1;
+          if (rowData.account_usable === "yes") usable += 1;
+          if (rowData.needs_fresh_login === "yes") refresh += 1;
+          if (subscription.startsWith("unverified") || String(rowData.auth_state || "").includes("expired") || String(rowData.auth_state || "").includes("invalid") || rowData.error_code) bad += 1;
+
+          const tableRow = document.createElement("tr");
+          appendCell(tableRow, String(index + 1));
+          appendCell(tableRow, rowData.email || rowData.label || "", true);
+          appendCell(tableRow, rowData.code_url || "", true);
+          appendCell(tableRow, rowData.plus_txt_line || "", true);
+          appendBadgeCell(tableRow, rowData.subscription || rowData.claim_subscription || (preview ? "pending" : ""));
+          appendCell(tableRow, rowData.subscription_source || (preview ? "jwt_preview" : ""));
+          appendCell(tableRow, rowData.subscription_confidence || (preview ? "not_checked" : ""));
+          appendBadgeCell(tableRow, rowData.auth_state || (preview ? "not_checked" : ""));
+          const usableCell = appendBadgeCell(tableRow, rowData.account_usable || (preview ? "unknown" : ""));
+          if (rowData.ban_state) usableCell.appendChild(document.createTextNode(` ${rowData.ban_state}`));
+          const promoCell = appendBadgeCell(tableRow, rowData.first_month_free_promo || (preview ? "unknown" : ""));
+          if (rowData.promo_title) promoCell.appendChild(document.createTextNode(` ${rowData.promo_title}`));
+          const refreshCell = appendBadgeCell(tableRow, rowData.needs_fresh_login || (preview ? "unknown" : ""));
+          if (rowData.refresh_reason) refreshCell.appendChild(document.createTextNode(` ${rowData.refresh_reason}`));
+          appendCell(tableRow, rowData.raw_plan || rowData.claim_raw_plan || "");
+          appendCell(tableRow, rowData.claim_subscription || "");
+          appendCell(tableRow, rowData.jwt_exp_utc || "", true);
+          appendCell(tableRow, rowData.token_hash || "", true);
+          appendCell(tableRow, rowData.source_endpoint || "");
+          appendCell(tableRow, rowData.error_code || rowData.error || "");
+          tableBody.appendChild(tableRow);
+        });
+
+        statNodes.input.textContent = String(envelope.input_count ?? linesFromInput().length);
+        statNodes.parsed.textContent = String(envelope.unique_count ?? currentRows.length);
+        statNodes.plus.textContent = String(plus);
+        statNodes.free.textContent = String(free);
+        statNodes.promo.textContent = String(promo);
+        statNodes.usable.textContent = String(usable);
+        statNodes.refresh.textContent = String(refresh);
+        statNodes.bad.textContent = String(bad);
+        errorOutput.textContent = Array.isArray(envelope.errors) && envelope.errors.length ? envelope.errors.join("；") : "";
+        errorOutput.hidden = !errorOutput.textContent;
+        setExportState(currentRows.length > 0);
+      }
+
+      function csvEscape(value) {
+        return `"${String(value ?? "").replace(/"/g, '""')}"`;
+      }
+
+      function downloadText(filename, text, mime = "text/plain;charset=utf-8") {
+        const url = URL.createObjectURL(new Blob([text], { type: mime }));
+        const anchor = document.createElement("a");
+        anchor.href = url;
+        anchor.download = filename;
+        document.body.appendChild(anchor);
+        anchor.click();
+        anchor.remove();
+        setTimeout(() => URL.revokeObjectURL(url), 1000);
+      }
+
+      function exportCsv() {
+        if (!currentRows.length) return log("没有结果可导出，先启动查询。");
+        const fields = ["label", "email", "code_url", "plus_txt_line", "account_id", "token_hash", "subscription", "subscription_confidence", "subscription_source", "raw_plan", "claim_subscription", "claim_raw_plan", "auth_state", "http_status", "account_usable", "ban_state", "usable_source", "needs_fresh_login", "refresh_reason", "first_month_free_promo", "promo_id", "promo_plan", "promo_title", "promo_discount", "promo_duration", "promo_source", "jwt_state", "jwt_exp_utc", "source_endpoint", "error_code", "error"];
+        const csv = [fields.join(","), ...currentRows.map((row) => fields.map((field) => csvEscape(row[field])).join(","))].join("\n");
+        downloadText("subscription_status_webui.csv", `\ufeff${csv}\n`, "text/csv;charset=utf-8");
+        log(`已导出 CSV：${currentRows.length} 条。`);
+      }
+
+      function normalizePlusLine(raw) {
+        const text = String(raw || "").trim();
+        const tokenMatch = text.match(/eyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+/);
+        const prefix = (tokenMatch ? text.slice(0, tokenMatch.index) : text).replace(/(?:----|---|——)+$/g, "").trim();
+        const email = prefix.match(/[A-Za-z0-9._%+\-]+@[A-Za-z0-9.\-]+\.[A-Za-z]{2,}/)?.[0] || "";
+        if (!email) return "";
+        const parts = prefix.split(/----|——|---/).map((part) => part.trim()).filter(Boolean);
+        const password = parts[0] === email ? (parts[1] || "") : "";
+        const secret = parts[0] === email ? (parts[2] || "").replace(/^https?:\/\/2fa\.fb\.tools\//, "") : "";
+        return `${email}——${password}——${secret}`;
+      }
+
+      function exportPlusTxt() {
+        const rows = currentRows.filter((row) => effectiveSubscription(row) === "plus");
+        if (!rows.length) return log("当前结果里没有 Plus。");
+        const lines = rows.map((row) => normalizePlusLine(row.plus_txt_line) || `${row.email || row.label || ""}————`);
+        downloadText("plus_accounts_email_password_2fa.txt", `\ufeff${lines.join("\n")}\n`);
+        log(`已导出 Plus TXT：${lines.length} 条。`);
+      }
+
+      async function tokenHash(token) {
+        const bytes = new TextEncoder().encode(token);
+        const digest = await crypto.subtle.digest("SHA-256", bytes);
+        return Array.from(new Uint8Array(digest)).map((value) => value.toString(16).padStart(2, "0")).join("").slice(0, 12);
+      }
+
+      async function exportPromoTxt() {
+        const rows = currentRows.filter((row) => effectiveSubscription(row) === "free" && row.first_month_free_promo === "yes" && row.account_usable === "yes");
+        if (!rows.length) return log("当前结果里没有【可用 + Free + 首月优惠有效】的账号。");
+        const inputByHash = new Map();
+        for (const rawLine of linesFromInput()) {
+          for (const match of rawLine.matchAll(/eyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+/g)) {
+            inputByHash.set(await tokenHash(match[0]), rawLine);
+          }
+        }
+        const lines = rows.map((row) => inputByHash.get(row.token_hash)).filter(Boolean);
+        if (!lines.length) return log("检测到了优惠账号，但没有在输入框中匹配到原始 AT。");
+        downloadText("free_first_month_promo_usable_full_with_at.txt", `\ufeff${lines.join("\n")}\n`);
+        log(`已导出优惠 AT TXT：${lines.length} 条。`);
+      }
+
+      async function parseSubscriptionInput(silent = false) {
+        const text = input.value;
+        if (!text.trim()) {
+          renderRows([], true, { input_count: 0, unique_count: 0 });
+          setBusy("idle");
+          if (!silent) log("没有输入。");
+          return;
+        }
+        try {
+          setBusy("parsing");
+          const data = await postJson(parseApiUrl, { text }, 15000);
+          renderRows(data.rows, true, data);
+          setBusy("parsed", "ok");
+          if (!silent) log(`识别 ${data.count || 0} 个 AT，去重后 ${data.unique_count || 0} 个。`);
+        } catch (error) {
+          setBusy("parse error", "bad");
+          setStatus(error.message, "error");
+          log(`解析失败：${error.message}`);
+        }
+      }
+
+      async function startSubscriptionCheck() {
+        const text = input.value;
+        if (!text.trim()) return log("没有输入，请先粘贴账号行或 AT。");
+        if (checking) return;
+        checking = true;
+        startButton.disabled = true;
+        parseButton.disabled = true;
+        const originalText = startButton.textContent;
+        startButton.textContent = "查询中…";
+        const probeAll = probeAllInput.checked;
+        const concurrency = Math.max(1, Math.min(20, Number(concurrencyInput.value || 4)));
+        try {
+          setBusy("checking");
+          setStatus(probeAll ? "正在探测全部 endpoint，速度较慢，请耐心等待。" : "正在执行完整订阅检测。", "warning");
+          log(probeAll ? "开始查询全部 backend endpoint；此模式较慢。" : "开始快速查询；首个 endpoint 失败时切换一次备用 endpoint。");
+          const data = await postJson(checkApiUrl, { text, concurrency, probe_all: probeAll, timeout: probeAll ? 6 : 8 }, probeAll ? 180000 : 90000);
+          renderRows(data.rows, false, data);
+          setBusy("done", "ok");
+          setStatus(`检测完成：Plus ${data.summary?.plus || 0}，Free ${data.summary?.free || 0}，可用 ${data.extra_summary?.account_usable_yes || 0}。`, "success");
+          log(`完成：总数 ${data.count || 0}；plus=${data.summary?.plus || 0} free=${data.summary?.free || 0} 未验证=${data.extra_summary?.unverified || 0} 自动重试=${data.retry_count || 0} 需新登录=${data.extra_summary?.needs_fresh_login_yes || 0} Free首月免费=${data.extra_summary?.free_first_month_promo_yes || 0} 可用=${data.extra_summary?.account_usable_yes || 0}`);
+        } catch (error) {
+          setBusy("check error", "bad");
+          setStatus(error.message, "error");
+          log(`查询失败：${error.message}`);
+        } finally {
+          checking = false;
+          startButton.disabled = false;
+          parseButton.disabled = false;
+          startButton.textContent = originalText;
+        }
+      }
+
+      function intercept(button, handler) {
+        button.addEventListener("click", (event) => {
+          event.preventDefault();
+          event.stopImmediatePropagation();
+          handler();
+        }, true);
+      }
+
+      intercept(startButton, startSubscriptionCheck);
+      intercept(parseButton, () => parseSubscriptionInput(false));
+      intercept(clearButton, () => {
+        input.value = "";
+        currentRows = [];
+        tableBody.replaceChildren();
+        dashboard.classList.remove("visible");
+        emptyOutput.classList.remove("hidden");
+        logOutput.textContent = "";
+        errorOutput.hidden = true;
+        inputCount.textContent = "0 条";
+        setExportState(false);
+        setBusy("idle");
+        setStatus("等待粘贴 AT 或 session JSON。");
+      });
+      intercept(exportCsvButton, exportCsv);
+      intercept(exportPlusButton, exportPlusTxt);
+      intercept(exportPromoButton, exportPromoTxt);
+
+      input.addEventListener("input", () => {
+        inputCount.textContent = `${linesFromInput().length} 条`;
+      });
+      input.addEventListener("keydown", (event) => {
+        if (event.key === "Enter" && !event.shiftKey) {
+          event.preventDefault();
+          event.stopImmediatePropagation();
+          startSubscriptionCheck();
+        }
+      }, true);
     })();
   </script>
 </body>
