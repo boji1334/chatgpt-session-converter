@@ -1437,7 +1437,9 @@
       }
 
       function itemPlanType(item) {
-        return canonicalPlanType(item.remote?.plan_type || item.info?.planType);
+        const remotePlan = item.remote?.plan_type;
+        const localPlan = item.info?.planType;
+        return canonicalPlanType(item.remote?.active === true ? (remotePlan || localPlan) : (localPlan || remotePlan));
       }
 
       function normalizedPlan(item) {
