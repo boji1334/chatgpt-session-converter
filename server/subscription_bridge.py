@@ -249,6 +249,94 @@ def run_check(body: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def run_check_stream(body: dict[str, Any], emit) -> dict[str, Any]:
+    """Run the same checker while reporting one progress event per finished account."""
+    text = str(body.get("text") or "")
+    items, errors, raw_count, extras_by_hash = parse_items_from_text(text)
+    total = len(items)
+    emit({"type": "start", "total": total, "input_count": raw_count})
+    if not items:
+        result = {"count": 0, "input_count": raw_count, "unique_count": 0, "rows": [], "summary": {}, "extra_summary": {}, "errors": errors[:200]}
+        emit({"type": "result", "data": result})
+        return result
+
+    concurrency = max(1, min(int(body.get("concurrency") or 4), 20))
+    probe_all = bool(body.get("probe_all", False))
+    timeout = max(3.0, min(float(body.get("timeout") or (6 if probe_all else 8)), 25.0))
+    endpoints = checker.DEFAULT_ENDPOINTS if probe_all else [checker.DEFAULT_ENDPOINTS[0]]
+    started = time.perf_counter()
+    diag_rows: list[dict[str, Any]] = []
+
+    def enrich(row: dict[str, str]) -> dict[str, str]:
+        extra = extras_by_hash.get(row.get("token_hash", ""), {})
+        row["code_url"] = extra.get("code_url", "")
+        row["plus_txt_line"] = extra.get("plus_txt_line", "")
+        if not row.get("email") and extra.get("email"):
+            row["email"] = extra["email"]
+        if extra.get("email"):
+            row["label"] = extra["email"]
+        return row
+
+    def needs_retry(row: dict[str, str]) -> bool:
+        subscription = (row.get("subscription") or "").lower()
+        error_code = (row.get("error_code") or "").lower()
+        return subscription in ("", "unknown", "unverified") or error_code in ("network_error", "timeout", "request_error")
+
+    def check_final(item):
+        row, diagnostics = checker.check_one(item, endpoints, timeout, None, 0, {}, probe_all)
+        row = enrich(row)
+        retried = False
+        if needs_retry(row) and not probe_all:
+            retry_row, retry_diagnostics = checker.check_one(item, [checker.DEFAULT_ENDPOINTS[1]], timeout, None, 0, {}, False)
+            row = enrich(retry_row)
+            diagnostics.extend(retry_diagnostics)
+            retried = True
+        return row, diagnostics, retried
+
+    rows: list[dict[str, str]] = []
+    retry_count = 0
+    completed = 0
+    workers = max(1, min(concurrency, total))
+    with ThreadPoolExecutor(max_workers=workers) as executor:
+        futures = [executor.submit(check_final, item) for item in items]
+        for future in as_completed(futures):
+            row, diagnostics, retried = future.result()
+            rows.append(row)
+            diag_rows.extend(diagnostics)
+            retry_count += int(retried)
+            completed += 1
+            emit({
+                "type": "progress",
+                "completed": completed,
+                "total": total,
+                "row": {
+                    "label": row.get("label", ""),
+                    "email": row.get("email", ""),
+                    "subscription": row.get("subscription", ""),
+                    "account_usable": row.get("account_usable", ""),
+                    "needs_fresh_login": row.get("needs_fresh_login", ""),
+                    "first_month_free_promo": row.get("first_month_free_promo", ""),
+                    "error_code": row.get("error_code", ""),
+                },
+            })
+
+    rows.sort(key=lambda row: (int(row.get("line_no") or 0), row.get("label", "")))
+    result = {
+        "count": total,
+        "input_count": raw_count,
+        "unique_count": total,
+        "elapsed_ms": int((time.perf_counter() - started) * 1000),
+        "retry_count": retry_count,
+        "rows": rows,
+        "summary": summarize(rows),
+        "extra_summary": extra_summarize(rows),
+        "diag": diag_rows,
+        "errors": errors[:200],
+    }
+    emit({"type": "result", "data": result})
+    return result
+
+
 def main() -> int:
     try:
         body = json.loads(sys.stdin.read() or "{}")
@@ -260,6 +348,12 @@ def main() -> int:
             output = {"count": raw_count, "unique_count": len(items), "rows": rows, "errors": errors[:200]}
         elif action == "csv":
             output = {"csv": "\ufeff" + rows_to_csv(body.get("rows") if isinstance(body.get("rows"), list) else [])}
+        elif action == "check_stream":
+            def emit(event):
+                sys.stdout.write(json.dumps(event, ensure_ascii=False, separators=(",", ":")) + "\n")
+                sys.stdout.flush()
+            run_check_stream(body, emit)
+            return 0
         else:
             output = run_check(body)
         sys.stdout.write(json.dumps(output, ensure_ascii=False, separators=(",", ":")))

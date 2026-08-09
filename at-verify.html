@@ -26,6 +26,9 @@
       --red: #b15436;
       --green: #2e806d;
       --green-soft: #dff1e9;
+      --plus-yellow: #9a6700;
+      --plus-yellow-soft: #fff3bf;
+      --plus-yellow-line: #e4bd55;
     }
 
     * { box-sizing: border-box; }
@@ -388,6 +391,77 @@
     .status.warning { border-color: #e7bba7; background: var(--orange-soft); color: var(--orange); }
     .status.error { border-color: #dfaaa0; background: #fff2ef; color: var(--red); }
 
+    .check-progress {
+      margin-top: 12px;
+      padding: 13px 14px 14px;
+      border: 1px solid #cbdedb;
+      border-radius: 10px;
+      background: #f1f8f6;
+    }
+
+    .check-progress[hidden] { display: none; }
+
+    .check-progress-head,
+    .check-progress-meta {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+    }
+
+    .check-progress-label {
+      color: var(--teal-dark);
+      font-size: 16px;
+      font-weight: 900;
+    }
+
+    .check-progress-percent {
+      color: var(--teal-dark);
+      font-size: 18px;
+      font-weight: 900;
+      font-variant-numeric: tabular-nums;
+    }
+
+    .check-progress-track {
+      position: relative;
+      height: 14px;
+      margin-top: 10px;
+      overflow: hidden;
+      border: 1px solid #b9d9d5;
+      border-radius: 999px;
+      background: #dcece9;
+    }
+
+    .check-progress-fill {
+      position: relative;
+      width: 0%;
+      height: 100%;
+      border-radius: inherit;
+      background: linear-gradient(90deg, #1c6d6a, #4b9f91);
+      transition: width .35s ease;
+    }
+
+    .check-progress.checking .check-progress-fill::after {
+      position: absolute;
+      inset: 0 auto 0 -35%;
+      width: 35%;
+      content: "";
+      background: linear-gradient(90deg, transparent, rgba(255,255,255,.72), transparent);
+      animation: progress-sheen 1.25s linear infinite;
+    }
+
+    @keyframes progress-sheen {
+      from { transform: translateX(0); }
+      to { transform: translateX(390%); }
+    }
+
+    .check-progress-meta {
+      margin-top: 8px;
+      color: var(--muted);
+      font-size: 14px;
+      line-height: 1.45;
+    }
+
     .probe-option {
       display: inline-flex;
       align-items: center;
@@ -462,7 +536,7 @@
 
     .subscription-stat .num { color: var(--ink); font-size: 28px; font-weight: 900; line-height: 1; }
     .subscription-stat .name { margin-top: 6px; color: var(--muted); font-size: 14px; font-weight: 850; }
-    .subscription-stat.plus .num { color: #2955c8; }
+    .subscription-stat.plus .num { color: var(--plus-yellow); }
     .subscription-stat.free .num { color: var(--green); }
     .subscription-stat.promo .num { color: #b85c1a; }
     .subscription-stat.usable .num { color: var(--teal); }
@@ -501,7 +575,7 @@
       background: white;
     }
 
-    .subscription-account-card.plus { border-left-color: #3767d7; background: #f8faff; }
+    .subscription-account-card.plus { border-color: var(--plus-yellow-line); border-left-color: #d69e2e; background: #fffdf5; }
     .subscription-account-card.free { border-left-color: var(--green); background: #f7fcfa; }
     .subscription-account-card.bad { border-color: #dfaaa0; border-left-color: var(--red); background: #fff8f6; }
     .subscription-account-card.warn { border-color: #e7bba7; border-left-color: var(--orange); background: #fffaf7; }
@@ -525,7 +599,7 @@
       font-weight: 900;
     }
 
-    .subscription-account-card.plus .subscription-card-index { background: #e8f0ff; color: #2955c8; }
+    .subscription-account-card.plus .subscription-card-index { background: var(--plus-yellow-soft); color: var(--plus-yellow); }
     .subscription-account-card.free .subscription-card-index { background: #dff1e9; color: var(--green); }
     .subscription-account-card.bad .subscription-card-index { background: #f5d5cb; color: var(--red); }
 
@@ -562,7 +636,7 @@
       white-space: nowrap;
     }
 
-    .subscription-card-plan.plus { background: #e8f0ff; color: #2955c8; }
+    .subscription-card-plan.plus { background: var(--plus-yellow-soft); color: var(--plus-yellow); }
     .subscription-card-plan.free { background: #dff1e9; color: var(--green); }
     .subscription-card-plan.warn { background: #ffe0cc; color: var(--orange); }
 
@@ -581,7 +655,7 @@
     .subscription-card-chip.ok { background: #dff1e9; color: var(--green); }
     .subscription-card-chip.bad { background: #f5d5cb; color: var(--red); }
     .subscription-card-chip.warn { background: #ffe0cc; color: var(--orange); }
-    .subscription-card-chip.plus { background: #e8f0ff; color: #2955c8; }
+    .subscription-card-chip.plus { background: var(--plus-yellow-soft); color: var(--plus-yellow); }
 
     .subscription-card-meta {
       display: grid;
@@ -681,7 +755,7 @@
       font-weight: 900;
     }
 
-    .subscription-badge.plus { background: #e8f0ff; color: #2955c8; }
+    .subscription-badge.plus { background: var(--plus-yellow-soft); color: var(--plus-yellow); }
     .subscription-badge.free { background: #dff1e9; color: var(--green); }
     .subscription-badge.ok { background: #dff1e9; color: var(--green); }
     .subscription-badge.bad { background: #f5d5cb; color: var(--red); }
@@ -789,7 +863,7 @@
     }
 
     .plan-badge.free { background: #e3f2f0; color: #1c6d6a; }
-    .plan-badge.plus { background: #e8f0ff; color: #2955c8; }
+    .plan-badge.plus { background: var(--plus-yellow-soft); color: var(--plus-yellow); }
     .plan-badge.business { background: #e8f0ff; color: #2955c8; }
     .plan-badge.pro { background: #f3e8ff; color: #6b2fc2; }
     .plan-badge.team { background: #fff3e0; color: #b85c1a; }
@@ -881,7 +955,7 @@
     .batch-stat.error .batch-stat-value { color: var(--red); }
     .batch-stat.warning .batch-stat-value { color: var(--orange); }
     .batch-stat.final .batch-stat-value { color: var(--teal); }
-    .batch-stat.plus .batch-stat-value { color: #2955c8; }
+    .batch-stat.plus .batch-stat-value { color: var(--plus-yellow); }
     .batch-stat.free .batch-stat-value { color: var(--green); }
     .batch-stat.trial .batch-stat-value { color: #b85c1a; }
 
@@ -982,7 +1056,7 @@
       white-space: nowrap;
     }
 
-    .batch-item-plan.plus { background: #e8f0ff; color: #2955c8; }
+    .batch-item-plan.plus { background: var(--plus-yellow-soft); color: var(--plus-yellow); }
     .batch-item-plan.free { background: #dff1e9; color: var(--green); }
     .batch-item-plan.business { background: #e8f0ff; color: #2955c8; }
     .batch-item-plan.pro { background: #f3e8ff; color: #6b2fc2; }
@@ -1142,6 +1216,19 @@
           <span class="batch-subtitle" id="splitStatus">仅处理非空行，分包在浏览器本地完成。</span>
         </div>
         <p class="status" id="status" aria-live="polite">等待粘贴 AT 或 session JSON。</p>
+        <section class="check-progress" id="checkProgress" hidden aria-live="polite">
+          <div class="check-progress-head">
+            <strong class="check-progress-label" id="checkProgressLabel">准备检测</strong>
+            <span class="check-progress-percent" id="checkProgressPercent">0%</span>
+          </div>
+          <div class="check-progress-track" role="progressbar" aria-label="账号检测进度" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" id="checkProgressTrack">
+            <div class="check-progress-fill" id="checkProgressFill"></div>
+          </div>
+          <div class="check-progress-meta">
+            <span id="checkProgressDetail">等待开始</span>
+            <span id="checkProgressElapsed">已用时 00:00</span>
+          </div>
+        </section>
 
           </section>
           <section class="output-panel" aria-labelledby="outputPanelTitle">
@@ -2283,6 +2370,13 @@
       const dashboard = document.querySelector("#subscriptionDashboard");
       const busyBadge = document.querySelector("#subscriptionBusyBadge");
       const logOutput = document.querySelector("#subscriptionLog");
+      const progressPanel = document.querySelector("#checkProgress");
+      const progressLabel = document.querySelector("#checkProgressLabel");
+      const progressPercent = document.querySelector("#checkProgressPercent");
+      const progressTrack = document.querySelector("#checkProgressTrack");
+      const progressFill = document.querySelector("#checkProgressFill");
+      const progressDetail = document.querySelector("#checkProgressDetail");
+      const progressElapsed = document.querySelector("#checkProgressElapsed");
       const cardGrid = document.querySelector("#subscriptionCards");
       const technicalSummary = document.querySelector("#subscriptionTechnicalSummary");
       const tableBody = document.querySelector("#subscriptionTableBody");
@@ -2292,8 +2386,13 @@
       const localHost = ["localhost", "127.0.0.1"].includes(globalThis.location?.hostname);
       const parseApiUrl = localHost ? `${globalThis.location.origin}/api/parse` : apiParseMeta;
       const checkApiUrl = localHost ? `${globalThis.location.origin}/api/check` : apiCheckMeta;
+      const checkStreamApiUrl = localHost ? `${globalThis.location.origin}/api/check-stream` : apiCheckMeta.replace(/\/api\/check$/, "/api/check-stream");
       let currentRows = [];
       let checking = false;
+      let progressTimer = null;
+      let progressStartedAt = 0;
+      let progressTotal = 0;
+      let progressMode = "fast";
 
       const statNodes = {
         input: document.querySelector("#subscriptionInputLines"),
@@ -2324,6 +2423,111 @@
       function setBusy(text, kind = "") {
         busyBadge.textContent = text;
         busyBadge.className = `subscription-busy${kind ? ` ${kind}` : ""}`;
+      }
+
+      function formatElapsed(milliseconds) {
+        const seconds = Math.max(0, Math.floor(milliseconds / 1000));
+        return `${String(Math.floor(seconds / 60)).padStart(2, "0")}:${String(seconds % 60).padStart(2, "0")}`;
+      }
+
+      function setProgress(value, label, detail) {
+        const normalized = Math.max(0, Math.min(100, Math.round(value)));
+        progressFill.style.width = `${normalized}%`;
+        progressPercent.textContent = `${normalized}%`;
+        progressTrack.setAttribute("aria-valuenow", String(normalized));
+        progressTrack.setAttribute("aria-valuetext", `${label}，${normalized}%`);
+        if (label) progressLabel.textContent = label;
+        if (detail) progressDetail.textContent = detail;
+      }
+
+      function startProgress(probeAll, total, concurrency) {
+        progressMode = probeAll ? "all" : "fast";
+        progressTotal = Math.max(0, Number(total || linesFromInput().length));
+        progressStartedAt = Date.now();
+        progressPanel.hidden = false;
+        progressPanel.classList.add("checking");
+        setProgress(2, probeAll ? "正在探测全部 endpoint" : "正在检查账号", `${progressTotal} 个账号 · 并发 ${concurrency}${probeAll ? " · 全部 endpoint" : " · 快速模式"}`);
+        clearInterval(progressTimer);
+        progressTimer = setInterval(() => {
+          const elapsed = Date.now() - progressStartedAt;
+          progressElapsed.textContent = `已用时 ${formatElapsed(elapsed)}`;
+          const ceiling = progressMode === "all" ? 91 : 94;
+          const speed = progressMode === "all" ? 2.1 : 4.2;
+          const estimated = Math.min(ceiling, 2 + (elapsed / 1000) * speed);
+          if (estimated > Number(progressTrack.getAttribute("aria-valuenow") || 0)) {
+            setProgress(estimated, progressMode === "all" ? "正在探测全部 endpoint" : "正在检查账号");
+          }
+        }, 250);
+      }
+
+      function updateAccountProgress(completed, total, row) {
+        progressTotal = Math.max(progressTotal, Number(total || 0));
+        const actual = progressTotal ? (Number(completed || 0) / progressTotal) * 100 : 0;
+        const name = row?.email || row?.label || `账号 ${completed}`;
+        setProgress(actual, `已完成 ${completed} / ${progressTotal} 个账号`, `${name} · 这一项检测完成`);
+      }
+
+      function finishProgress(success, detail = "") {
+        clearInterval(progressTimer);
+        progressTimer = null;
+        progressPanel.classList.remove("checking");
+        setProgress(success ? 100 : Number(progressTrack.getAttribute("aria-valuenow") || 0), success ? "检测完成" : "检测中断", detail || (success ? "结果已经显示在右侧" : "请查看下方错误信息"));
+        progressElapsed.textContent = `总用时 ${formatElapsed(Date.now() - progressStartedAt)}`;
+      }
+
+      async function streamCheck(url, body, timeoutMs, onProgress) {
+        const controller = new AbortController();
+        const timer = setTimeout(() => controller.abort(), timeoutMs);
+        try {
+          const response = await fetch(url, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(body),
+            signal: controller.signal,
+          });
+          if (!response.ok) {
+            const errorData = await response.json().catch(() => ({}));
+            throw new Error(errorData.error || `HTTP ${response.status}`);
+          }
+          if (!response.body) throw new Error("浏览器不支持实时进度流");
+          const reader = response.body.getReader();
+          const decoder = new TextDecoder();
+          let buffer = "";
+          let result;
+          while (true) {
+            const { value, done } = await reader.read();
+            buffer += decoder.decode(value || new Uint8Array(), { stream: !done });
+            const lines = buffer.split(/\r?\n/);
+            buffer = lines.pop() || "";
+            for (const line of lines) {
+              if (!line.trim()) continue;
+              const event = JSON.parse(line);
+              if (event.type === "start") {
+                progressTotal = Number(event.total || progressTotal);
+                progressDetail.textContent = `${progressTotal} 个账号 · 已连接检测服务`;
+              } else if (event.type === "progress") {
+                updateAccountProgress(event.completed, event.total, event.row);
+              } else if (event.type === "result") {
+                result = event.data;
+              } else if (event.type === "error") {
+                throw new Error(event.error || "订阅检查服务失败");
+              }
+            }
+            if (done) break;
+          }
+          if (buffer.trim()) {
+            const event = JSON.parse(buffer);
+            if (event.type === "result") result = event.data;
+            if (event.type === "error") throw new Error(event.error || "订阅检查服务失败");
+          }
+          if (!result) throw new Error("检测服务没有返回最终结果");
+          return result;
+        } catch (error) {
+          if (error?.name === "AbortError") throw new Error(`请求超时（${Math.round(timeoutMs / 1000)} 秒）`);
+          throw error;
+        } finally {
+          clearTimeout(timer);
+        }
       }
 
       function setExportState(enabled) {
@@ -2656,17 +2860,20 @@
         const concurrency = Math.max(1, Math.min(20, Number(concurrencyInput.value || 4)));
         try {
           setBusy("checking");
+          startProgress(probeAll, linesFromInput().length, concurrency);
           setStatus(probeAll ? "正在探测全部 endpoint，速度较慢，请耐心等待。" : "正在执行完整订阅检测。", "warning");
           log(probeAll ? "开始查询全部 backend endpoint；此模式较慢。" : "开始快速查询；首个 endpoint 失败时切换一次备用 endpoint。");
-          const data = await postJson(checkApiUrl, { text, concurrency, probe_all: probeAll, timeout: probeAll ? 6 : 8 }, probeAll ? 180000 : 90000);
+          const data = await streamCheck(checkStreamApiUrl, { text, concurrency, probe_all: probeAll, timeout: probeAll ? 6 : 8 }, probeAll ? 180000 : 90000);
           renderRows(data.rows, false, data);
           setBusy("done", "ok");
           setStatus(`检测完成：Plus ${data.summary?.plus || 0}，Free ${data.summary?.free || 0}，可用 ${data.extra_summary?.account_usable_yes || 0}。`, "success");
           log(`完成：总数 ${data.count || 0}；plus=${data.summary?.plus || 0} free=${data.summary?.free || 0} 未验证=${data.extra_summary?.unverified || 0} 自动重试=${data.retry_count || 0} 需新登录=${data.extra_summary?.needs_fresh_login_yes || 0} Free首月免费=${data.extra_summary?.free_first_month_promo_yes || 0} 可用=${data.extra_summary?.account_usable_yes || 0}`);
+          finishProgress(true, `${data.count || 0} 个账号全部完成`);
         } catch (error) {
           setBusy("check error", "bad");
           setStatus(error.message, "error");
           log(`查询失败：${error.message}`);
+          finishProgress(false, error.message);
         } finally {
           checking = false;
           startButton.disabled = false;
@@ -2691,6 +2898,10 @@
         cardGrid.replaceChildren();
         tableBody.replaceChildren();
         technicalSummary.textContent = "查看完整技术字段";
+        clearInterval(progressTimer);
+        progressTimer = null;
+        progressPanel.hidden = true;
+        progressPanel.classList.remove("checking");
         dashboard.classList.remove("visible");
         emptyOutput.classList.remove("hidden");
         logOutput.textContent = "";

@@ -149,6 +149,84 @@ function runSubscriptionBridge(body, timeoutMs = SUBSCRIPTION_REQUEST_TIMEOUT_MS
   });
 }
 
+function streamSubscriptionBridge(body, response, origin, timeoutMs = SUBSCRIPTION_REQUEST_TIMEOUT_MS) {
+  const headers = {
+    "Content-Type": "application/x-ndjson; charset=utf-8",
+    "Cache-Control": "no-cache, no-transform",
+    "X-Content-Type-Options": "nosniff",
+    "X-Accel-Buffering": "no",
+    Connection: "keep-alive",
+  };
+  if (origin) {
+    headers["Access-Control-Allow-Origin"] = origin;
+    headers["Access-Control-Allow-Headers"] = "Content-Type";
+    headers["Access-Control-Allow-Methods"] = "GET, POST, OPTIONS";
+    headers.Vary = "Origin";
+  }
+  response.writeHead(200, headers);
+  response.flushHeaders?.();
+
+  const child = spawn(SUBSCRIPTION_PYTHON, [SUBSCRIPTION_BRIDGE_PATH], {
+    cwd: path.dirname(SUBSCRIPTION_BRIDGE_PATH),
+    stdio: ["pipe", "pipe", "pipe"],
+    windowsHide: true,
+  });
+  let stdoutBuffer = "";
+  let stderr = "";
+  let finished = false;
+  const writeEvent = (event) => {
+    if (finished || response.writableEnded) return;
+    response.write(`${JSON.stringify(event)}\n`);
+  };
+  const finish = () => {
+    if (finished) return;
+    finished = true;
+    clearTimeout(timer);
+    if (!response.writableEnded) response.end();
+  };
+  const timer = setTimeout(() => {
+    if (finished) return;
+    child.kill();
+    writeEvent({ type: "error", error: "订阅检查服务超时" });
+    finish();
+  }, timeoutMs);
+
+  child.stdout.setEncoding("utf8");
+  child.stderr.setEncoding("utf8");
+  child.stdout.on("data", (chunk) => {
+    stdoutBuffer += chunk;
+    const lines = stdoutBuffer.split(/\r?\n/);
+    stdoutBuffer = lines.pop() || "";
+    for (const line of lines) {
+      if (!line.trim()) continue;
+      try {
+        writeEvent(JSON.parse(line));
+      } catch {
+        console.error("subscription stream returned invalid JSON line");
+      }
+    }
+  });
+  child.stderr.on("data", (chunk) => { stderr += chunk; });
+  child.on("error", (error) => {
+    writeEvent({ type: "error", error: `订阅检查服务启动失败：${error.message}` });
+    finish();
+  });
+  child.on("close", (code) => {
+    if (stdoutBuffer.trim()) {
+      try { writeEvent(JSON.parse(stdoutBuffer)); } catch { /* ignore trailing noise */ }
+    }
+    if (code && !finished) {
+      console.error("subscription stream failed", stderr.trim());
+      writeEvent({ type: "error", error: `订阅检查服务失败（${code}）` });
+    }
+    finish();
+  });
+  response.on("close", () => {
+    if (!response.writableFinished && !finished) child.kill();
+  });
+  child.stdin.end(JSON.stringify({ ...body, action: "check_stream" }));
+}
+
 function parseUpstreamBody(text) {
   try {
     return JSON.parse(text);
@@ -709,6 +787,21 @@ const server = http.createServer(async (request, response) => {
   }
   if (request.method === "POST" && ["/api/check", "/api/subscription/check"].includes(url.pathname)) {
     await handleSubscriptionBridge(request, response, origin, "check");
+    return;
+  }
+  if (request.method === "POST" && ["/api/check-stream", "/api/subscription/check-stream"].includes(url.pathname)) {
+    if (!clientAllowed(request)) {
+      json(response, 429, { ok: false, error: "订阅查询过于频繁，请稍后重试" }, origin);
+      return;
+    }
+    let body;
+    try {
+      body = await readBody(request, SUBSCRIPTION_MAX_BODY_BYTES);
+    } catch (error) {
+      json(response, 400, { ok: false, error: error.message }, origin);
+      return;
+    }
+    streamSubscriptionBridge(body, response, origin, SUBSCRIPTION_REQUEST_TIMEOUT_MS);
     return;
   }
   if (request.method === "POST" && url.pathname === "/api/account/trial-eligibility") {
