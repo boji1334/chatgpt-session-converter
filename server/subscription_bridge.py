@@ -233,8 +233,11 @@ def run_check(body: dict[str, Any]) -> dict[str, Any]:
     retry_hashes = {row.get("token_hash", "") for row in rows if needs_retry(row)}
     retry_items = [item for item in items if checker.token_hash(item.token) in retry_hashes]
     retry_count = len(retry_items)
-    if retry_items and not probe_all:
-        retry_rows, retry_diag = run_batch(retry_items, timeout, min(concurrency, 8), 0, [checker.DEFAULT_ENDPOINTS[1]])
+    if retry_items:
+        retry_endpoints = endpoints if probe_all else [checker.DEFAULT_ENDPOINTS[1]]
+        retry_retries = 1 if probe_all else 0
+        retry_concurrency = min(concurrency, 4 if probe_all else 8)
+        retry_rows, retry_diag = run_batch(retry_items, timeout, retry_concurrency, retry_retries, retry_endpoints)
         diag_rows.extend(retry_diag)
         retry_by_hash = {row.get("token_hash", ""): row for row in retry_rows}
         rows = [retry_by_hash.get(row.get("token_hash", ""), row) for row in rows]
@@ -291,8 +294,10 @@ def run_check_stream(body: dict[str, Any], emit) -> dict[str, Any]:
         row, diagnostics = checker.check_one(item, endpoints, timeout, None, 0, {}, probe_all)
         row = enrich(row)
         retried = False
-        if needs_retry(row) and not probe_all:
-            retry_row, retry_diagnostics = checker.check_one(item, [checker.DEFAULT_ENDPOINTS[1]], timeout, None, 0, {}, False)
+        if needs_retry(row):
+            retry_endpoints = endpoints if probe_all else [checker.DEFAULT_ENDPOINTS[1]]
+            retry_retries = 1 if probe_all else 0
+            retry_row, retry_diagnostics = checker.check_one(item, retry_endpoints, timeout, None, retry_retries, {}, probe_all)
             row = enrich(retry_row)
             diagnostics.extend(retry_diagnostics)
             retried = True
