@@ -205,6 +205,17 @@ def jwt_payload(token: str) -> dict[str, Any]:
         return {}
 
 
+def jwt_is_signup(token: str) -> bool:
+    payload = jwt_payload(token)
+    auth = payload.get("https://api.openai.com/auth") if isinstance(payload, dict) else None
+    if not isinstance(auth, dict):
+        return False
+    value = auth.get("is_signup")
+    if isinstance(value, bool):
+        return value
+    return isinstance(value, str) and value.strip().lower() == "true"
+
+
 def extract_jwt(text: str) -> str:
     m = TOKEN_RE.search(text)
     return m.group(0) if m else ""
@@ -477,6 +488,38 @@ def classify_first_month_free_promo(data: Any | None) -> dict[str, str]:
         "promo_discount": first.get("discount", "")[:40],
         "promo_duration": first.get("duration", "")[:80],
         "promo_source": first.get("source", "")[:160],
+    })
+    return out
+
+
+def classify_signup_promo_candidate(
+    promo_info: dict[str, str], token: str, claim_sub: str, auth_state: str, data: Any | None
+) -> dict[str, str]:
+    """Mark a backend-valid newly signed-up Free account as an offer candidate.
+
+    OpenAI no longer consistently returns eligible_promo_campaigns. A signup
+    claim plus an accepted Free account is useful for export, but remains a
+    candidate until checkout confirms the exact discount and duration.
+    """
+    if promo_info.get("first_month_free_promo") == "yes":
+        return promo_info
+    if claim_sub != "free" or auth_state != "ok" or not jwt_is_signup(token):
+        return promo_info
+
+    signals: list[str] = ["jwt_is_signup"]
+    for key, value in scalar_walk(data):
+        tail = key.rsplit(".", 1)[-1].lower()
+        if tail == "is_eligible_for_yearly_plus_new_user_subscription" and value is True:
+            signals.append("yearly_plus_new_user_eligible")
+        if "eligible_offers" in key.lower() and tail in ("id", "default_offer_id") and str(value).lower() == "chatgptplusplan":
+            signals.append("plus_offer_available")
+
+    out = dict(promo_info)
+    out.update({
+        "first_month_free_promo": "likely",
+        "promo_plan": "chatgptplusplan",
+        "promo_title": "新注册 Free：首月优惠候选，结账页最终确认",
+        "promo_source": "+".join(dict.fromkeys(signals))[:160],
     })
     return out
 
@@ -920,6 +963,7 @@ def check_one(
 
     chosen = best_result or auth_result or (results[-1] if results else None)
     promo_info = classify_first_month_free_promo(best_data)
+    promo_info = classify_signup_promo_candidate(promo_info, item.token, claim_sub, auth_state, best_data)
     usability_info = classify_account_usability(best_data, auth_state)
     refresh_info = classify_refresh_requirement(auth_state, claim_sub)
     row = {
@@ -1007,6 +1051,7 @@ def self_test() -> int:
         "https://api.openai.com/auth": {
             "chatgpt_account_id": "acc_test",
             "chatgpt_plan_type": "free",
+            "is_signup": True,
         },
         "https://api.openai.com/profile": {
             "email": "user@example.com",
@@ -1074,6 +1119,21 @@ def self_test() -> int:
     promo = classify_first_month_free_promo(promo_fixture)
     usable = classify_account_usability(promo_fixture, "ok")
     assert promo["first_month_free_promo"] == "yes", promo
+    candidate_fixture = {
+        "accounts": {
+            "default": {
+                "is_eligible_for_yearly_plus_new_user_subscription": True,
+                "eligible_offers": {
+                    "default_offer_id": "chatgptplusplan",
+                    "offers": [{"id": "chatgptplusplan"}],
+                },
+            }
+        }
+    }
+    candidate = classify_signup_promo_candidate(
+        classify_first_month_free_promo(candidate_fixture), fake, "free", "ok", candidate_fixture
+    )
+    assert candidate["first_month_free_promo"] == "likely", candidate
     assert usable["account_usable"] == "yes" and usable["ban_state"] == "not_banned", usable
     banned = classify_account_usability({"account": {"is_deactivated": True}}, "ok")
     assert banned["account_usable"] == "no" and banned["ban_state"] == "is_deactivated", banned

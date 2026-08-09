@@ -1260,7 +1260,7 @@
                 <div class="subscription-stat"><div class="num" id="subscriptionParsed">0</div><div class="name">识别 AT</div></div>
                 <div class="subscription-stat plus"><div class="num" id="subscriptionPlus">0</div><div class="name">Plus</div></div>
                 <div class="subscription-stat free"><div class="num" id="subscriptionFree">0</div><div class="name">Free</div></div>
-                <div class="subscription-stat promo"><div class="num" id="subscriptionPromo">0</div><div class="name">Free 首月免费</div></div>
+                <div class="subscription-stat promo"><div class="num" id="subscriptionPromo">0</div><div class="name">Free 首月优惠</div></div>
                 <div class="subscription-stat usable"><div class="num" id="subscriptionUsable">0</div><div class="name">可用</div></div>
                 <div class="subscription-stat refresh"><div class="num" id="subscriptionRefresh">0</div><div class="name">需新登录</div></div>
                 <div class="subscription-stat bad"><div class="num" id="subscriptionBad">0</div><div class="name">未验证 / 错误</div></div>
@@ -2564,6 +2564,7 @@
         if (text === "plus") return "plus";
         if (text === "free") return "free";
         if (text === "yes" || text === "ok") return "ok";
+        if (text === "likely") return "warn";
         if (text === "no" || text.includes("expired") || text.includes("invalid") || text.includes("forbidden")) return "bad";
         if (text.startsWith("unverified") || text === "pending" || text === "unknown" || text === "not_checked") return "warn";
         return type || "unknown";
@@ -2659,7 +2660,8 @@
         const checks = document.createElement("div");
         checks.className = "subscription-card-checks";
         appendCardChip(checks, state.label, state.chip);
-        if (rowData.first_month_free_promo === "yes") appendCardChip(checks, "首月免费", "ok");
+        if (rowData.first_month_free_promo === "yes") appendCardChip(checks, "首月免费已确认", "ok");
+        if (rowData.first_month_free_promo === "likely") appendCardChip(checks, "首月优惠候选", "warn");
         if (rowData.needs_fresh_login === "yes" && state.label !== "需新登录") appendCardChip(checks, "需新登录", "warn");
         if (rowData.ban_state && !["not_checked", "unknown", "none"].includes(String(rowData.ban_state).toLowerCase())) {
           appendCardChip(checks, `封禁：${rowData.ban_state}`, badgeClass(rowData.ban_state));
@@ -2710,7 +2712,7 @@
           const subscription = effectiveSubscription(rowData);
           if (subscription === "plus") plus += 1;
           if (subscription === "free") free += 1;
-          if (subscription === "free" && rowData.first_month_free_promo === "yes") promo += 1;
+          if (subscription === "free" && ["yes", "likely"].includes(rowData.first_month_free_promo)) promo += 1;
           if (rowData.account_usable === "yes") usable += 1;
           if (rowData.needs_fresh_login === "yes") refresh += 1;
           if (subscription.startsWith("unverified") || String(rowData.auth_state || "").includes("expired") || String(rowData.auth_state || "").includes("invalid") || rowData.error_code) bad += 1;
@@ -2824,12 +2826,12 @@
       }
 
       async function exportPromoTxt() {
-        const rows = currentRows.filter((row) => effectiveSubscription(row) === "free" && row.first_month_free_promo === "yes" && row.account_usable === "yes");
-        if (!rows.length) return log("当前结果里没有【可用 + Free + 首月优惠有效】的账号。");
+        const rows = currentRows.filter((row) => effectiveSubscription(row) === "free" && ["yes", "likely"].includes(row.first_month_free_promo) && row.account_usable === "yes");
+        if (!rows.length) return log("当前结果里没有【可用 + Free + 首月优惠候选】的账号。");
         const inputByHash = lastCheckedInputByHash.size ? lastCheckedInputByHash : await buildInputHashMap(input.value);
         const lines = rows.map((row) => inputByHash.get(row.token_hash)).filter(Boolean);
         if (!lines.length) return log("检测到了优惠账号，但没有在输入框中匹配到原始 AT。");
-        downloadText("free_first_month_promo_usable_full_with_at.txt", `\ufeff${lines.join("\n")}\n`);
+        downloadText("free_first_month_promo_candidates_usable_full_with_at.txt", `\ufeff${lines.join("\n")}\n`);
         log(`已导出优惠 AT TXT：${lines.length} 条。`);
       }
 
@@ -2876,7 +2878,7 @@
           renderRows(data.rows, false, data);
           setBusy("done", "ok");
           setStatus(`检测完成：Plus ${data.summary?.plus || 0}，Free ${data.summary?.free || 0}，可用 ${data.extra_summary?.account_usable_yes || 0}。`, "success");
-          log(`完成：总数 ${data.count || 0}；plus=${data.summary?.plus || 0} free=${data.summary?.free || 0} 未验证=${data.extra_summary?.unverified || 0} 自动重试=${data.retry_count || 0} 需新登录=${data.extra_summary?.needs_fresh_login_yes || 0} Free首月免费=${data.extra_summary?.free_first_month_promo_yes || 0} 可用=${data.extra_summary?.account_usable_yes || 0}`);
+          log(`完成：总数 ${data.count || 0}；plus=${data.summary?.plus || 0} free=${data.summary?.free || 0} 未验证=${data.extra_summary?.unverified || 0} 自动重试=${data.retry_count || 0} 需新登录=${data.extra_summary?.needs_fresh_login_yes || 0} Free首月优惠=${data.extra_summary?.free_first_month_promo_candidate || 0}（明确确认=${data.extra_summary?.free_first_month_promo_yes || 0}） 可用=${data.extra_summary?.account_usable_yes || 0}`);
           finishProgress(true, `${data.count || 0} 个账号全部完成`);
         } catch (error) {
           setBusy("check error", "bad");

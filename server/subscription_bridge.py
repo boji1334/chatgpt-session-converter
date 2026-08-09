@@ -151,7 +151,12 @@ def extra_summarize(rows: list[dict[str, str]]) -> dict[str, int]:
     for row in rows:
         if str(row.get("subscription") or "").startswith("unverified"):
             summary["unverified"] = summary.get("unverified", 0) + 1
-        if row.get("first_month_free_promo") == "yes":
+        promo_state = row.get("first_month_free_promo")
+        if promo_state in ("yes", "likely"):
+            summary["first_month_free_promo_candidate"] = summary.get("first_month_free_promo_candidate", 0) + 1
+            if row.get("subscription") == "free":
+                summary["free_first_month_promo_candidate"] = summary.get("free_first_month_promo_candidate", 0) + 1
+        if promo_state == "yes":
             summary["first_month_free_promo_yes"] = summary.get("first_month_free_promo_yes", 0) + 1
             if row.get("subscription") == "free":
                 summary["free_first_month_promo_yes"] = summary.get("free_first_month_promo_yes", 0) + 1
