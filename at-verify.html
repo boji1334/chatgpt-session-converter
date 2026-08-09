@@ -2389,6 +2389,7 @@
       const checkStreamApiUrl = localHost ? `${globalThis.location.origin}/api/check-stream` : apiCheckMeta.replace(/\/api\/check$/, "/api/check-stream");
       let currentRows = [];
       let checking = false;
+      let lastCheckedInputByHash = new Map();
       let progressTimer = null;
       let progressStartedAt = 0;
       let progressTotal = 0;
@@ -2811,15 +2812,21 @@
         return Array.from(new Uint8Array(digest)).map((value) => value.toString(16).padStart(2, "0")).join("").slice(0, 12);
       }
 
-      async function exportPromoTxt() {
-        const rows = currentRows.filter((row) => effectiveSubscription(row) === "free" && row.first_month_free_promo === "yes" && row.account_usable === "yes");
-        if (!rows.length) return log("当前结果里没有【可用 + Free + 首月优惠有效】的账号。");
+      async function buildInputHashMap(text) {
         const inputByHash = new Map();
-        for (const rawLine of linesFromInput()) {
+        const sourceLines = String(text || "").split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
+        for (const rawLine of sourceLines) {
           for (const match of rawLine.matchAll(/eyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+/g)) {
             inputByHash.set(await tokenHash(match[0]), rawLine);
           }
         }
+        return inputByHash;
+      }
+
+      async function exportPromoTxt() {
+        const rows = currentRows.filter((row) => effectiveSubscription(row) === "free" && row.first_month_free_promo === "yes" && row.account_usable === "yes");
+        if (!rows.length) return log("当前结果里没有【可用 + Free + 首月优惠有效】的账号。");
+        const inputByHash = lastCheckedInputByHash.size ? lastCheckedInputByHash : await buildInputHashMap(input.value);
         const lines = rows.map((row) => inputByHash.get(row.token_hash)).filter(Boolean);
         if (!lines.length) return log("检测到了优惠账号，但没有在输入框中匹配到原始 AT。");
         downloadText("free_first_month_promo_usable_full_with_at.txt", `\ufeff${lines.join("\n")}\n`);
@@ -2859,11 +2866,13 @@
         const probeAll = probeAllInput.checked;
         const concurrency = Math.max(1, Math.min(20, Number(concurrencyInput.value || 4)));
         try {
+          const checkedInputByHash = await buildInputHashMap(text);
           setBusy("checking");
           startProgress(probeAll, linesFromInput().length, concurrency);
           setStatus(probeAll ? "正在探测全部 endpoint，速度较慢，请耐心等待。" : "正在执行完整订阅检测。", "warning");
           log(probeAll ? "开始查询全部 backend endpoint；此模式较慢。" : "开始快速查询；首个 endpoint 失败时切换一次备用 endpoint。");
           const data = await streamCheck(checkStreamApiUrl, { text, concurrency, probe_all: probeAll, timeout: probeAll ? 6 : 8 }, probeAll ? 180000 : 90000);
+          lastCheckedInputByHash = checkedInputByHash;
           renderRows(data.rows, false, data);
           setBusy("done", "ok");
           setStatus(`检测完成：Plus ${data.summary?.plus || 0}，Free ${data.summary?.free || 0}，可用 ${data.extra_summary?.account_usable_yes || 0}。`, "success");
@@ -2895,6 +2904,7 @@
       intercept(clearButton, () => {
         input.value = "";
         currentRows = [];
+        lastCheckedInputByHash = new Map();
         cardGrid.replaceChildren();
         tableBody.replaceChildren();
         technicalSummary.textContent = "查看完整技术字段";

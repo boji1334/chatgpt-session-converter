@@ -12,8 +12,8 @@ Input token formats, one per line:
   {"accessToken":"<access_token>", ...}
 
 Output CSV columns include auth_state + subscription. Tokens are never printed.
-If backend endpoints reject the AT and the JWT claim is free, current manual
-rule displays that unverified_free state as plus.
+If backend endpoints reject the AT, the JWT plan claim is preserved while the
+account is separately marked unverified and in need of a fresh login.
 """
 from __future__ import annotations
 
@@ -564,6 +564,16 @@ def classify_refresh_requirement(auth_state: str, claim_sub: str) -> dict[str, s
     }
 
 
+def subscription_fallback_for_auth_failure(claim_sub: str, claim_raw_plan: str, auth_state: str) -> tuple[str, str, str, str]:
+    """Keep JWT plan claims separate from backend token validity."""
+    if claim_sub != "unknown":
+        if auth_state in ("token_expired_or_revoked", "invalid_or_wrong_token", "forbidden"):
+            return claim_sub, claim_raw_plan, "jwt_claim_auth_failed", "jwt_claim_only_auth_failed"
+        if auth_state in ("error", "rate_limited", "server_error"):
+            return claim_sub, claim_raw_plan, "jwt_claim_fallback", "jwt_claim_only_backend_unavailable"
+    return "unverified", "", "auth_failed", "unverified_auth_failed"
+
+
 def classify_subscription(data: Any) -> tuple[str, str]:
     """Return (subscription, raw_plan). subscription is plus/free/pro/team/business/enterprise/paid_unknown/unknown."""
     authoritative_hits: list[tuple[str, str, str]] = []
@@ -878,23 +888,9 @@ def check_one(
 
     auth_state, auth_result = auth_state_from_results(results)
     if auth_state != "ok":
-        # Business rule for this checker: invalid / expired AT with a free claim is treated as Plus.
-        # These tokens fail backend auth, so mark the source as a manual auth-failed override.
-        if claim_sub == "free" and auth_state in ("token_expired_or_revoked", "invalid_or_wrong_token", "forbidden"):
-            sub = "plus"
-            raw_plan = "invalid_at_inferred_plus"
-            subscription_source = "manual_invalid_at_is_plus"
-            subscription_confidence = "manual_override_auth_failed"
-        elif claim_sub != "unknown" and auth_state in ("error", "rate_limited", "server_error"):
-            sub = claim_sub
-            raw_plan = claim_raw_plan
-            subscription_source = "jwt_claim_fallback"
-            subscription_confidence = "jwt_claim_only_backend_unavailable"
-        else:
-            sub = "unverified"
-            raw_plan = ""
-            subscription_source = "auth_failed"
-            subscription_confidence = "unverified_auth_failed"
+        sub, raw_plan, subscription_source, subscription_confidence = subscription_fallback_for_auth_failure(
+            claim_sub, claim_raw_plan, auth_state
+        )
     elif sub != "unknown":
         subscription_source = best_result.name if best_result else "backend"
         subscription_confidence = "backend_verified"
@@ -1081,6 +1077,10 @@ def self_test() -> int:
     assert usable["account_usable"] == "yes" and usable["ban_state"] == "not_banned", usable
     banned = classify_account_usability({"account": {"is_deactivated": True}}, "ok")
     assert banned["account_usable"] == "no" and banned["ban_state"] == "is_deactivated", banned
+    failed_free = subscription_fallback_for_auth_failure("free", "free", "invalid_or_wrong_token")
+    assert failed_free == ("free", "free", "jwt_claim_auth_failed", "jwt_claim_only_auth_failed"), failed_free
+    failed_plus = subscription_fallback_for_auth_failure("plus", "chatgptplusplan", "token_expired_or_revoked")
+    assert failed_plus[0] == "plus" and failed_plus[2] == "jwt_claim_auth_failed", failed_plus
     print("parse=ok jwt=ok")
     return 0
 
