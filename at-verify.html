@@ -170,11 +170,14 @@
     .input-meta strong { color: var(--teal-dark); font-weight: 850; }
 
     .actions {
-      display: grid;
-      grid-template-columns: 1fr auto;
+      display: flex;
+      align-items: center;
+      flex-wrap: wrap;
       gap: 9px;
       margin-top: 18px;
     }
+
+    .actions .primary { flex: 1 1 240px; }
 
     .split-actions {
       display: flex;
@@ -598,7 +601,8 @@
       .shell { margin: 0 auto; }
       .page-nav { align-items: flex-start; flex-direction: column; }
       .head, .body { padding-left: 20px; padding-right: 20px; }
-      .actions { grid-template-columns: 1fr; }
+      .actions { align-items: stretch; }
+      .actions .button { flex: 1 1 100%; }
       .button.secondary { order: 2; }
       .result-grid { grid-template-columns: 1fr; }
       .batch-head { align-items: stretch; flex-direction: column; }
@@ -627,7 +631,7 @@
       </header>
       <div class="body">
         <label for="tokenInput">ChatGPT accessToken / session JSON</label>
-        <textarea id="tokenInput" spellcheck="false" autocomplete="off" placeholder="单条：eyJhbGciOi...&#10;批量：每行一个 AT，支持 Bearer 前缀&#10;&#10;也支持单条完整 session JSON"></textarea>
+        <textarea id="tokenInput" spellcheck="false" autocomplete="off" placeholder="单条：eyJhbGciOi...&#10;批量：每行一个 AT，支持 Bearer 前缀&#10;也支持：邮箱----密码----2FA----AT&#10;&#10;也支持单条完整 session JSON"></textarea>
         <div class="input-meta">
           <span>批量模式：每行一个 AT，空行会自动忽略</span>
           <strong id="inputCount">0 条</strong>
@@ -636,6 +640,10 @@
         <div class="actions">
           <button class="button primary" id="verifyButton" type="button">开始检测</button>
           <button class="button secondary" id="clearButton" type="button">清空</button>
+          <button class="button secondary" id="prepareButton" type="button">整理识别</button>
+          <button class="button secondary" id="exportCsvButton" type="button" disabled>导出 CSV</button>
+          <button class="button secondary" id="exportPlusButton" type="button" disabled>导出 Plus TXT</button>
+          <button class="button secondary" id="exportPromoButton" type="button" disabled>导出优惠 AT TXT</button>
         </div>
         <div class="split-actions">
           <button class="button ghost" id="splitButton" type="button">分裂 CDK ZIP</button>
@@ -716,7 +724,7 @@
       </div>
     </section>
     <footer class="foot">
-      <span>仅验证 · 不保存凭据 · 不下发文件</span>
+      <span>仅验证 · 不保存凭据 · 导出与分包均在浏览器本地完成</span>
       <a href="./at-to-sub2api.html">需要下载文件？前往越接码入口 →</a>
     </footer>
   </main>
@@ -735,6 +743,10 @@
       const tokenInput = document.querySelector("#tokenInput");
       const verifyButton = document.querySelector("#verifyButton");
       const clearButton = document.querySelector("#clearButton");
+      const prepareButton = document.querySelector("#prepareButton");
+      const exportCsvButton = document.querySelector("#exportCsvButton");
+      const exportPlusButton = document.querySelector("#exportPlusButton");
+      const exportPromoButton = document.querySelector("#exportPromoButton");
       const splitButton = document.querySelector("#splitButton");
       const splitSizeInput = document.querySelector("#splitSize");
       const splitStatus = document.querySelector("#splitStatus");
@@ -770,6 +782,12 @@
       let batchRunning = false;
       let batchRunId = 0;
 
+      function setExportButtons(enabled) {
+        exportCsvButton.disabled = !enabled;
+        exportPlusButton.disabled = !enabled;
+        exportPromoButton.disabled = !enabled;
+      }
+
       function setStatus(message, kind = "") {
         status.textContent = message;
         status.className = `status${kind ? ` ${kind}` : ""}`;
@@ -800,8 +818,13 @@
       }
 
       function parseToken(raw) {
-        const token = String(raw || "").trim().replace(/^Bearer\s+/i, "").trim();
-        if (!token || /\s/.test(token)) throw new Error("请只粘贴一个完整的 AT，不要包含空格或换行");
+        const rawText = String(raw || "").trim();
+        const matches = [...rawText.matchAll(/eyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+/g)];
+        if (matches.length > 1) throw new Error("一行只能包含一个 AT");
+        const token = matches.length === 1
+          ? matches[0][0]
+          : rawText.replace(/^Bearer\s+/i, "").trim();
+        if (!token || /\s/.test(token)) throw new Error("请粘贴完整的 AT，或使用 邮箱----密码----2FA----AT 格式");
         const segments = token.split(".");
         if (segments.length !== 3) throw new Error("AT 不是有效的 JWT 格式（需要三段 Base64URL）");
         let payload;
@@ -1177,6 +1200,126 @@
         setTimeout(() => URL.revokeObjectURL(url), 1000);
       }
 
+      function downloadText(filename, text, mime = "text/plain;charset=utf-8") {
+        const url = URL.createObjectURL(new Blob([text], { type: mime }));
+        const anchor = document.createElement("a");
+        anchor.href = url;
+        anchor.download = filename;
+        document.body.appendChild(anchor);
+        anchor.click();
+        anchor.remove();
+        setTimeout(() => URL.revokeObjectURL(url), 1000);
+      }
+
+      function sourceMeta(rawSource) {
+        const raw = String(rawSource || "").trim();
+        const jwt = raw.match(/eyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+/);
+        const prefix = (jwt ? raw.slice(0, jwt.index) : raw).trim()
+          .replace(/(?:----|---|——)+$/g, "")
+          .trim();
+        const email = (prefix.match(/[A-Za-z0-9._%+\-]+@[A-Za-z0-9.\-]+\.[A-Za-z]{2,}/) || [""])[0];
+        const parts = prefix.split(/----|——|---/).map((value) => value.trim()).filter(Boolean);
+        const password = parts.length >= 2 && parts[0] === email ? parts[1] : "";
+        const twoFaUrl = (prefix.match(/https?:\/\/2fa\.fb\.tools\/[A-Za-z0-9]+/i) || [""])[0];
+        const twoFaSecret = twoFaUrl ? (twoFaUrl.match(/https?:\/\/2fa\.fb\.tools\/([A-Za-z0-9]+)/i) || ["", ""])[1] : (parts[2] || "");
+        const plusLine = email ? `${email}——${password}——${twoFaSecret}` : "";
+        return { email, password, twoFaUrl, twoFaSecret, plusLine, raw };
+      }
+
+      function normalizedPlan(item) {
+        const raw = String(item.remote?.plan_type || item.info?.planType || "free").toLowerCase();
+        if (raw.includes("enterprise")) return "enterprise";
+        if (raw.includes("business")) return "business";
+        if (raw.includes("team")) return "team";
+        if (raw.includes("pro")) return "pro";
+        if (raw.includes("plus")) return "plus";
+        return "free";
+      }
+
+      function exportRecord(item) {
+        const meta = sourceMeta(item.source);
+        const remote = item.remote || {};
+        const info = item.info || {};
+        return {
+          index: item.index,
+          email: remote.email || info.email || meta.email || "",
+          code_url: meta.twoFaUrl,
+          plus_txt_line: meta.plusLine,
+          plan: normalizedPlan(item),
+          active_status: item.activeStatus || "",
+          trial_status: item.trialStatus || "",
+          status: item.status || "",
+          account_id: remote.account_id || info.accountId || "",
+          user_id: remote.user_id || info.userId || "",
+          token_expires_at: info.exp ? info.exp.toISOString() : "",
+          upstream_status: remote.upstream_status || remote.httpStatus || "",
+          token_preview: maskToken(item.token),
+          message: item.message || remote.error || item.trial?.error || "",
+        };
+      }
+
+      function csvEscape(value) {
+        return `"${String(value ?? "").replace(/"/g, '""')}"`;
+      }
+
+      function exportBatchCsv() {
+        if (!batchItems.length) {
+          setStatus("没有批量结果可导出，请先点击开始检测。", "warning");
+          return;
+        }
+        const fields = ["index", "email", "code_url", "plus_txt_line", "plan", "active_status", "trial_status", "status", "account_id", "user_id", "token_expires_at", "upstream_status", "token_preview", "message"];
+        const rows = batchItems.map(exportRecord);
+        const csv = [fields.join(","), ...rows.map((row) => fields.map((field) => csvEscape(row[field])).join(","))].join("\n");
+        downloadText("at_verify_batch_results.csv", `\ufeff${csv}\n`, "text/csv;charset=utf-8");
+        setStatus(`CSV 已导出：${rows.length} 条。`, "success");
+      }
+
+      function exportPlusTxt() {
+        const items = batchItems.filter((item) => item.activeStatus === "active" && normalizedPlan(item) === "plus");
+        const lines = items.map((item) => sourceMeta(item.source).plusLine || item.source).filter(Boolean);
+        if (!lines.length) {
+          setStatus("当前批量结果中没有可导出的 Plus 账号。", "warning");
+          return;
+        }
+        downloadText("plus_accounts_email_password_2fa.txt", `\ufeff${lines.join("\n")}\n`);
+        setStatus(`Plus TXT 已导出：${lines.length} 条。`, "success");
+      }
+
+      function exportPromoTxt() {
+        const items = batchItems.filter((item) => item.status === "ready" && normalizedPlan(item) === "free");
+        const lines = items.map((item) => item.source).filter(Boolean);
+        if (!lines.length) {
+          setStatus("当前没有同时满足 Free、活跃、试用资格的账号。", "warning");
+          return;
+        }
+        downloadText("free_trial_eligible_with_at.txt", `\ufeff${lines.join("\n")}\n`);
+        setStatus(`优惠 AT TXT 已导出：${lines.length} 条。`, "success");
+      }
+
+      function prepareInput() {
+        const sources = getBatchSources(tokenInput.value);
+        if (!sources.length) {
+          setStatus("没有可整理的非空行。", "warning");
+          return;
+        }
+        let valid = 0;
+        const errors = [];
+        sources.forEach((source, index) => {
+          try {
+            parseInput(source);
+            valid += 1;
+          } catch (error) {
+            errors.push(`第 ${index + 1} 行：${error.message}`);
+          }
+        });
+        setStatus(
+          errors.length
+            ? `整理完成：识别 ${valid} 条，${errors.length} 条格式有问题。${errors[0]}`
+            : `整理完成：识别 ${valid} 条 AT，完整账号行和纯 AT 均可识别。`,
+          errors.length ? "warning" : "success"
+        );
+      }
+
       function splitCdkLocally() {
         const lines = tokenInput.value.split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
         const chunkSize = Number.parseInt(splitSizeInput.value, 10);
@@ -1359,6 +1502,7 @@
       async function runBatchVerify(sources) {
         const runId = ++batchRunId;
         batchRunning = true;
+        setExportButtons(false);
         verifyButton.disabled = true;
         clearButton.disabled = true;
         verifyButton.textContent = "批量检测中...";
@@ -1420,6 +1564,7 @@
         verifyButton.disabled = false;
         clearButton.disabled = false;
         verifyButton.textContent = "开始检测";
+        setExportButtons(batchItems.length > 0);
         renderBatchView();
 
         const ready = batchItems.filter((item) => item.status === "ready").length;
@@ -1503,6 +1648,7 @@
         batchResult.classList.remove("visible");
         usableTokensOutput.value = "";
         importUsableButton.disabled = true;
+        setExportButtons(false);
         verifyButton.disabled = false;
         clearButton.disabled = false;
         verifyButton.textContent = "开始检测";
@@ -1513,6 +1659,10 @@
 
       verifyButton.addEventListener("click", doVerify);
       clearButton.addEventListener("click", clearAll);
+      prepareButton.addEventListener("click", prepareInput);
+      exportCsvButton.addEventListener("click", exportBatchCsv);
+      exportPlusButton.addEventListener("click", exportPlusTxt);
+      exportPromoButton.addEventListener("click", exportPromoTxt);
       splitButton.addEventListener("click", splitCdkLocally);
       importUsableButton.addEventListener("click", () => {
         const usefulTokens = batchItems.filter((item) => item.status === "ready" && item.token).map((item) => item.token);
@@ -1526,6 +1676,7 @@
       tokenInput.addEventListener("input", () => {
         const sources = getBatchSources(tokenInput.value);
         inputCount.textContent = `${sources.length} 条`;
+        setExportButtons(false);
       });
 
       // Allow Enter to submit (but Shift+Enter for newline)
