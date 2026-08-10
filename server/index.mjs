@@ -174,26 +174,35 @@ function streamSubscriptionBridge(body, response, origin, timeoutMs = SUBSCRIPTI
   let stdoutBuffer = "";
   let stderr = "";
   let finished = false;
+  let timer;
+  let heartbeat;
   const writeEvent = (event) => {
     if (finished || response.writableEnded) return;
     response.write(`${JSON.stringify(event)}\n`);
+  };
+  const resetTimer = () => {
+    clearTimeout(timer);
+    timer = setTimeout(() => {
+      if (finished) return;
+      child.kill();
+      writeEvent({ type: "error", error: "订阅检查长时间没有进度" });
+      finish();
+    }, timeoutMs);
   };
   const finish = () => {
     if (finished) return;
     finished = true;
     clearTimeout(timer);
+    clearInterval(heartbeat);
     if (!response.writableEnded) response.end();
   };
-  const timer = setTimeout(() => {
-    if (finished) return;
-    child.kill();
-    writeEvent({ type: "error", error: "订阅检查服务超时" });
-    finish();
-  }, timeoutMs);
+  resetTimer();
+  heartbeat = setInterval(() => writeEvent({ type: "heartbeat", at: Date.now() }), 15_000);
 
   child.stdout.setEncoding("utf8");
   child.stderr.setEncoding("utf8");
   child.stdout.on("data", (chunk) => {
+    resetTimer();
     stdoutBuffer += chunk;
     const lines = stdoutBuffer.split(/\r?\n/);
     stdoutBuffer = lines.pop() || "";

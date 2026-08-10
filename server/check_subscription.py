@@ -607,8 +607,26 @@ def classify_refresh_requirement(auth_state: str, claim_sub: str) -> dict[str, s
     }
 
 
-def subscription_fallback_for_auth_failure(claim_sub: str, claim_raw_plan: str, auth_state: str) -> tuple[str, str, str, str]:
+def subscription_fallback_for_auth_failure(
+    claim_sub: str,
+    claim_raw_plan: str,
+    auth_state: str,
+    error_code: str = "",
+    jwt_state: str = "",
+) -> tuple[str, str, str, str]:
     """Keep JWT plan claims separate from backend token validity."""
+    if (
+        claim_sub == "free"
+        and auth_state == "token_expired_or_revoked"
+        and error_code == "token_expired"
+        and jwt_state == "jwt_not_expired"
+    ):
+        return (
+            "plus",
+            "unexpired_free_jwt_revoked",
+            "revoked_token_inferred_plus",
+            "inferred_plus_from_unexpired_revoked_token",
+        )
     if claim_sub != "unknown":
         if auth_state in ("token_expired_or_revoked", "invalid_or_wrong_token", "forbidden"):
             return claim_sub, claim_raw_plan, "jwt_claim_auth_failed", "jwt_claim_only_auth_failed"
@@ -852,7 +870,7 @@ def auth_state_from_results(results: list[EndpointResult]) -> tuple[str, Endpoin
     codes = {r.error_code for r in results if r.error_code}
     statuses = {r.status for r in results}
     if "token_expired" in codes:
-        return "token_expired_or_revoked", results[0]
+        return "token_expired_or_revoked", next((r for r in results if r.error_code == "token_expired"), results[0])
     if "invalid_token" in codes or "unauthorized" in codes or statuses == {401}:
         return "invalid_or_wrong_token", results[0]
     if 403 in statuses:
@@ -932,7 +950,11 @@ def check_one(
     auth_state, auth_result = auth_state_from_results(results)
     if auth_state != "ok":
         sub, raw_plan, subscription_source, subscription_confidence = subscription_fallback_for_auth_failure(
-            claim_sub, claim_raw_plan, auth_state
+            claim_sub,
+            claim_raw_plan,
+            auth_state,
+            auth_result.error_code if auth_result else "",
+            meta.get("jwt_state", ""),
         )
     elif sub != "unknown":
         subscription_source = best_result.name if best_result else "backend"
@@ -1141,6 +1163,14 @@ def self_test() -> int:
     assert failed_free == ("free", "free", "jwt_claim_auth_failed", "jwt_claim_only_auth_failed"), failed_free
     failed_plus = subscription_fallback_for_auth_failure("plus", "chatgptplusplan", "token_expired_or_revoked")
     assert failed_plus[0] == "plus" and failed_plus[2] == "jwt_claim_auth_failed", failed_plus
+    inferred_plus = subscription_fallback_for_auth_failure(
+        "free", "free", "token_expired_or_revoked", "token_expired", "jwt_not_expired"
+    )
+    assert inferred_plus[0] == "plus" and inferred_plus[2] == "revoked_token_inferred_plus", inferred_plus
+    invalidated_free = subscription_fallback_for_auth_failure(
+        "free", "free", "invalid_or_wrong_token", "token_invalidated", "jwt_not_expired"
+    )
+    assert invalidated_free[0] == "free" and invalidated_free[2] == "jwt_claim_auth_failed", invalidated_free
     print("parse=ok jwt=ok")
     return 0
 

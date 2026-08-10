@@ -1258,7 +1258,7 @@
               <div class="subscription-stats" aria-label="订阅检测统计">
                 <div class="subscription-stat"><div class="num" id="subscriptionInputLines">0</div><div class="name">输入行数</div></div>
                 <div class="subscription-stat"><div class="num" id="subscriptionParsed">0</div><div class="name">识别 AT</div></div>
-                <div class="subscription-stat plus"><div class="num" id="subscriptionPlus">0</div><div class="name">Plus</div></div>
+                <div class="subscription-stat plus"><div class="num" id="subscriptionPlus">0</div><div class="name" id="subscriptionPlusLabel">Plus</div></div>
                 <div class="subscription-stat free"><div class="num" id="subscriptionFree">0</div><div class="name">Free</div></div>
                 <div class="subscription-stat promo"><div class="num" id="subscriptionPromo">0</div><div class="name">Free 首月优惠</div></div>
                 <div class="subscription-stat usable"><div class="num" id="subscriptionUsable">0</div><div class="name">可用</div></div>
@@ -2399,6 +2399,7 @@
         input: document.querySelector("#subscriptionInputLines"),
         parsed: document.querySelector("#subscriptionParsed"),
         plus: document.querySelector("#subscriptionPlus"),
+        plusLabel: document.querySelector("#subscriptionPlusLabel"),
         free: document.querySelector("#subscriptionFree"),
         promo: document.querySelector("#subscriptionPromo"),
         usable: document.querySelector("#subscriptionUsable"),
@@ -2478,7 +2479,12 @@
 
       async function streamCheck(url, body, timeoutMs, onProgress) {
         const controller = new AbortController();
-        const timer = setTimeout(() => controller.abort(), timeoutMs);
+        let timer;
+        const resetTimer = () => {
+          clearTimeout(timer);
+          timer = setTimeout(() => controller.abort(), timeoutMs);
+        };
+        resetTimer();
         try {
           const response = await fetch(url, {
             method: "POST",
@@ -2497,6 +2503,7 @@
           let result;
           while (true) {
             const { value, done } = await reader.read();
+            resetTimer();
             buffer += decoder.decode(value || new Uint8Array(), { stream: !done });
             const lines = buffer.split(/\r?\n/);
             buffer = lines.pop() || "";
@@ -2524,7 +2531,7 @@
           if (!result) throw new Error("检测服务没有返回最终结果");
           return result;
         } catch (error) {
-          if (error?.name === "AbortError") throw new Error(`请求超时（${Math.round(timeoutMs / 1000)} 秒）`);
+          if (error?.name === "AbortError") throw new Error(`超过 ${Math.round(timeoutMs / 1000)} 秒没有收到检测进度`);
           throw error;
         } finally {
           clearTimeout(timer);
@@ -2660,6 +2667,7 @@
         const checks = document.createElement("div");
         checks.className = "subscription-card-checks";
         appendCardChip(checks, state.label, state.chip);
+        if (rowData.subscription_source === "revoked_token_inferred_plus") appendCardChip(checks, "Plus 推断：未过期 AT 被撤销", "warn");
         if (rowData.first_month_free_promo === "yes") appendCardChip(checks, "首月免费已确认", "ok");
         if (rowData.first_month_free_promo === "likely") appendCardChip(checks, "首月优惠候选", "warn");
         if (rowData.needs_fresh_login === "yes" && state.label !== "需新登录") appendCardChip(checks, "需新登录", "warn");
@@ -2755,6 +2763,8 @@
         statNodes.input.textContent = String(envelope.input_count ?? linesFromInput().length);
         statNodes.parsed.textContent = String(envelope.unique_count ?? currentRows.length);
         statNodes.plus.textContent = String(plus);
+        const inferredPlus = Number(envelope.extra_summary?.plus_inferred_from_revoked_token || 0);
+        statNodes.plusLabel.textContent = inferredPlus ? `Plus（推断 ${inferredPlus}）` : "Plus";
         statNodes.free.textContent = String(free);
         statNodes.promo.textContent = String(promo);
         statNodes.usable.textContent = String(usable);
@@ -2878,7 +2888,7 @@
           renderRows(data.rows, false, data);
           setBusy("done", "ok");
           setStatus(`检测完成：Plus ${data.summary?.plus || 0}，Free ${data.summary?.free || 0}，可用 ${data.extra_summary?.account_usable_yes || 0}。`, "success");
-          log(`完成：总数 ${data.count || 0}；plus=${data.summary?.plus || 0} free=${data.summary?.free || 0} 未验证=${data.extra_summary?.unverified || 0} 自动重试=${data.retry_count || 0} 需新登录=${data.extra_summary?.needs_fresh_login_yes || 0} Free首月优惠=${data.extra_summary?.free_first_month_promo_candidate || 0}（明确确认=${data.extra_summary?.free_first_month_promo_yes || 0}） 可用=${data.extra_summary?.account_usable_yes || 0}`);
+          log(`完成：总数 ${data.count || 0}；plus=${data.summary?.plus || 0}（失效AT推断=${data.extra_summary?.plus_inferred_from_revoked_token || 0}） free=${data.summary?.free || 0} 未验证=${data.extra_summary?.unverified || 0} 自动重试=${data.retry_count || 0} 需新登录=${data.extra_summary?.needs_fresh_login_yes || 0} Free首月优惠=${data.extra_summary?.free_first_month_promo_candidate || 0}（明确确认=${data.extra_summary?.free_first_month_promo_yes || 0}） 可用=${data.extra_summary?.account_usable_yes || 0}`);
           finishProgress(true, `${data.count || 0} 个账号全部完成`);
         } catch (error) {
           setBusy("check error", "bad");
