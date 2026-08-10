@@ -66,6 +66,23 @@ def transient_then_success():
 
 
 class SubscriptionBridgeRetryTests(unittest.TestCase):
+    def test_batch_plus_inference_requires_a_revoked_cohort(self):
+        candidate = {
+            "subscription": "free",
+            "claim_subscription": "free",
+            "jwt_state": "jwt_not_expired",
+            "needs_fresh_login": "yes",
+            "auth_state": "invalid_or_wrong_token",
+            "account_usable": "unknown",
+            "subscription_source": "jwt_claim_auth_failed",
+        }
+        isolated = bridge.apply_batch_plus_inference([dict(candidate)])
+        self.assertEqual(isolated[0]["subscription"], "free")
+
+        cohort = bridge.apply_batch_plus_inference([dict(candidate), dict(candidate)])
+        self.assertEqual([row["subscription"] for row in cohort], ["plus", "plus"])
+        self.assertTrue(all(row["subscription_source"] == "batch_revoked_token_inferred_plus" for row in cohort))
+
     def test_probe_all_batch_retries_transient_account(self):
         calls, fake_check_one = transient_then_success()
         with patch.object(bridge.checker, "check_one", side_effect=fake_check_one):

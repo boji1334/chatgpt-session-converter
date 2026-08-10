@@ -146,12 +146,38 @@ def summarize(rows: list[dict[str, str]]) -> dict[str, int]:
     return summary
 
 
+def apply_batch_plus_inference(rows: list[dict[str, str]]) -> list[dict[str, str]]:
+    """Stabilize a revoked post-upgrade cohort without promoting isolated invalid Free ATs."""
+    existing_inferred = sum(
+        1 for row in rows if str(row.get("subscription_source") or "").endswith("inferred_plus")
+    )
+    candidates = [
+        row for row in rows
+        if row.get("subscription") == "free"
+        and row.get("claim_subscription") == "free"
+        and row.get("jwt_state") == "jwt_not_expired"
+        and row.get("needs_fresh_login") == "yes"
+        and row.get("auth_state") in ("token_expired_or_revoked", "invalid_or_wrong_token")
+        and row.get("account_usable") != "yes"
+    ]
+    if existing_inferred + len(candidates) < 2:
+        return rows
+    for row in candidates:
+        row.update({
+            "subscription": "plus",
+            "raw_plan": "batch_revoked_unexpired_free_jwt",
+            "subscription_source": "batch_revoked_token_inferred_plus",
+            "subscription_confidence": "inferred_plus_from_revoked_batch",
+        })
+    return rows
+
+
 def extra_summarize(rows: list[dict[str, str]]) -> dict[str, int]:
     summary: dict[str, int] = {}
     for row in rows:
         if str(row.get("subscription") or "").startswith("unverified"):
             summary["unverified"] = summary.get("unverified", 0) + 1
-        if row.get("subscription_source") == "revoked_token_inferred_plus":
+        if str(row.get("subscription_source") or "").endswith("inferred_plus"):
             summary["plus_inferred_from_revoked_token"] = summary.get("plus_inferred_from_revoked_token", 0) + 1
         promo_state = row.get("first_month_free_promo")
         if promo_state in ("yes", "likely"):
@@ -244,6 +270,7 @@ def run_check(body: dict[str, Any]) -> dict[str, Any]:
         retry_by_hash = {row.get("token_hash", ""): row for row in retry_rows}
         rows = [retry_by_hash.get(row.get("token_hash", ""), row) for row in rows]
 
+    rows = apply_batch_plus_inference(rows)
     rows.sort(key=lambda row: (int(row.get("line_no") or 0), row.get("label", "")))
     return {
         "count": len(items),
@@ -332,6 +359,7 @@ def run_check_stream(body: dict[str, Any], emit) -> dict[str, Any]:
                 },
             })
 
+    rows = apply_batch_plus_inference(rows)
     rows.sort(key=lambda row: (int(row.get("line_no") or 0), row.get("label", "")))
     result = {
         "count": total,

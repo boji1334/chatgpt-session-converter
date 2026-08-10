@@ -2667,7 +2667,7 @@
         const checks = document.createElement("div");
         checks.className = "subscription-card-checks";
         appendCardChip(checks, state.label, state.chip);
-        if (rowData.subscription_source === "revoked_token_inferred_plus") appendCardChip(checks, "Plus 推断：未过期 AT 被撤销", "warn");
+        if (String(rowData.subscription_source || "").endsWith("inferred_plus")) appendCardChip(checks, "Plus 推断：未过期 AT 被撤销", "warn");
         if (rowData.first_month_free_promo === "yes") appendCardChip(checks, "首月免费已确认", "ok");
         if (rowData.first_month_free_promo === "likely") appendCardChip(checks, "首月优惠候选", "warn");
         if (rowData.needs_fresh_login === "yes" && state.label !== "需新登录") appendCardChip(checks, "需新登录", "warn");
