@@ -57,6 +57,12 @@ DEFAULT_ENDPOINTS: list[tuple[str, str, str, Any]] = [
     ("billing_config", "GET", "https://chatgpt.com/backend-api/pageConfigs/billing", None),
     ("models", "GET", "https://chatgpt.com/backend-api/models?iim=false&is_gizmo=false&supports_model_picker_upgrade_presets=true", None),
 ]
+ACCOUNT_AUTH_ENDPOINTS = {
+    "accounts_check_v4_tz",
+    "accounts_check_v4",
+    "accounts_check",
+    "optimized_check",
+}
 
 TOKEN_RE = re.compile(r"eyJ[A-Za-z0-9_\-]+\.[A-Za-z0-9_\-]+\.[A-Za-z0-9_\-]+")
 PLAN_WORDS = ("enterprise", "business", "team", "pro", "plus", "go", "free")
@@ -864,6 +870,19 @@ def http_json(name: str, method: str, url: str, payload: Any, token: str, timeou
 def auth_state_from_results(results: list[EndpointResult]) -> tuple[str, EndpointResult | None]:
     if not results:
         return "not_checked", None
+    account_results = [r for r in results if r.name in ACCOUNT_AUTH_ENDPOINTS]
+    account_ok = next((r for r in account_results if 200 <= r.status < 300), None)
+    if account_ok:
+        return "ok", account_ok
+    account_codes = {r.error_code for r in account_results if r.error_code}
+    account_statuses = {r.status for r in account_results}
+    if "token_expired" in account_codes:
+        return "token_expired_or_revoked", next((r for r in account_results if r.error_code == "token_expired"), account_results[0])
+    if "invalid_token" in account_codes or "unauthorized" in account_codes or account_statuses == {401}:
+        return "invalid_or_wrong_token", next((r for r in account_results if r.status == 401), account_results[0])
+    if 403 in account_statuses:
+        return "forbidden", next((r for r in account_results if r.status == 403), account_results[0])
+
     ok = next((r for r in results if 200 <= r.status < 300), None)
     if ok:
         return "ok", ok
@@ -1171,6 +1190,10 @@ def self_test() -> int:
         "free", "free", "invalid_or_wrong_token", "token_invalidated", "jwt_not_expired"
     )
     assert invalidated_free[0] == "free" and invalidated_free[2] == "jwt_claim_auth_failed", invalidated_free
+    account_expired = EndpointResult("accounts_check_v4_tz", "GET", "fixture", 401, None, "token_expired", "expired", 1)
+    weak_ok = EndpointResult("models", "GET", "fixture", 200, {}, "", "", 1)
+    mixed_auth = auth_state_from_results([account_expired, weak_ok])
+    assert mixed_auth[0] == "token_expired_or_revoked" and mixed_auth[1] == account_expired, mixed_auth
     print("parse=ok jwt=ok")
     return 0
 
