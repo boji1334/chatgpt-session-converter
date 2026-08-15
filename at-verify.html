@@ -1200,6 +1200,7 @@
           <button class="button secondary" id="exportCsvButton" type="button" disabled>导出 CSV</button>
           <button class="button secondary" id="exportPlusButton" type="button" disabled>导出 Plus TXT</button>
           <button class="button secondary" id="exportPromoButton" type="button" disabled>导出已确认优惠 AT TXT</button>
+          <button class="button secondary" id="exportAccountInfoButton" type="button">提取账号信息 TXT</button>
         </div>
         <div class="split-actions">
           <button class="button ghost" id="splitButton" type="button">分裂 CDK ZIP</button>
@@ -1381,6 +1382,7 @@
       const exportCsvButton = document.querySelector("#exportCsvButton");
       const exportPlusButton = document.querySelector("#exportPlusButton");
       const exportPromoButton = document.querySelector("#exportPromoButton");
+      const exportAccountInfoButton = document.querySelector("#exportAccountInfoButton");
       const splitButton = document.querySelector("#splitButton");
       const splitSizeInput = document.querySelector("#splitSize");
       const splitStatus = document.querySelector("#splitStatus");
@@ -2803,6 +2805,37 @@
         return `${email}——${password}——${secret}`;
       }
 
+      function extractAccountInfoLine(raw) {
+        const text = String(raw || "").trim();
+        if (!text) return "";
+        const tokenMatch = text.match(/eyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+/);
+        const prefix = (tokenMatch ? text.slice(0, tokenMatch.index) : text)
+          .replace(/(?:----|---|——)+$/g, "")
+          .trim();
+        const parts = prefix.split(/----|——|---/).map((part) => part.trim());
+        if (parts.length < 3 || !parts[0]) return "";
+        return `${parts[0]}----${parts[1]}----${parts[2]}`;
+      }
+
+      function extractAccountInfoLines(raw) {
+        return String(raw || "").split(/\r?\n/).map(extractAccountInfoLine).filter(Boolean);
+      }
+
+      function exportAccountInfoTxt() {
+        const sourceLines = linesFromInput();
+        const lines = extractAccountInfoLines(input.value);
+        const skipped = Math.max(0, sourceLines.length - lines.length);
+        if (!lines.length) {
+          setStatus("没有识别到“邮箱----密码----2FA----AT”格式的账号信息。", "warning");
+          log("账号信息提取失败：没有符合格式的输入行。");
+          return;
+        }
+        downloadText("account_info_email_password_2fa.txt", `\ufeff${lines.join("\n")}\n`);
+        const skippedText = skipped ? `，跳过 ${skipped} 条格式不完整内容` : "";
+        setStatus(`账号信息 TXT 已导出：${lines.length} 条${skippedText}。`, "success");
+        log(`已提取账号信息 TXT：${lines.length} 条${skippedText}。`);
+      }
+
       function exportPlusTxt() {
         const rows = currentRows.filter((row) => effectiveSubscription(row) === "plus");
         if (!rows.length) return log("当前结果里没有 Plus。");
@@ -2929,6 +2962,7 @@
       intercept(exportCsvButton, exportCsv);
       intercept(exportPlusButton, exportPlusTxt);
       intercept(exportPromoButton, exportPromoTxt);
+      intercept(exportAccountInfoButton, exportAccountInfoTxt);
 
       input.addEventListener("input", () => {
         inputCount.textContent = `${linesFromInput().length} 条`;
