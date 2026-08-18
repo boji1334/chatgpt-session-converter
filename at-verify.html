@@ -2475,6 +2475,8 @@
       async function streamCheck(url, body, timeoutMs, onProgress) {
         const controller = new AbortController();
         let timer;
+        let receivedEvents = 0;
+        let progressEvents = 0;
         const resetTimer = () => {
           clearTimeout(timer);
           timer = setTimeout(() => controller.abort(), timeoutMs);
@@ -2505,10 +2507,12 @@
             for (const line of lines) {
               if (!line.trim()) continue;
               const event = JSON.parse(line);
+              receivedEvents += 1;
               if (event.type === "start") {
                 progressTotal = Number(event.total || progressTotal);
                 progressDetail.textContent = `${progressTotal} 个账号 · 已连接检测服务`;
               } else if (event.type === "progress") {
+                progressEvents += 1;
                 updateAccountProgress(event.completed, event.total, event.row);
               } else if (event.type === "result") {
                 result = event.data;
@@ -2520,13 +2524,33 @@
           }
           if (buffer.trim()) {
             const event = JSON.parse(buffer);
+            receivedEvents += 1;
             if (event.type === "result") result = event.data;
             if (event.type === "error") throw new Error(event.error || "订阅检查服务失败");
           }
           if (!result) throw new Error("检测服务没有返回最终结果");
           return result;
         } catch (error) {
-          if (error?.name === "AbortError") throw new Error(`超过 ${Math.round(timeoutMs / 1000)} 秒没有收到检测进度`);
+          if (error?.name === "AbortError") {
+            const timeoutError = new Error(`超过 ${Math.round(timeoutMs / 1000)} 秒没有收到检测进度`);
+            timeoutError.code = "STREAM_TIMEOUT";
+            timeoutError.receivedEvents = receivedEvents;
+            timeoutError.progressEvents = progressEvents;
+            throw timeoutError;
+          }
+          if (error?.name === "TypeError" || error?.message === "Failed to fetch") {
+            const networkError = new Error(
+              progressEvents
+                ? `检测流连接中断，已收到 ${progressEvents} 条进度，未生成完整结果`
+                : "检测流连接失败，尚未收到完整检测结果",
+            );
+            networkError.code = "STREAM_CONNECTION";
+            networkError.receivedEvents = receivedEvents;
+            networkError.progressEvents = progressEvents;
+            throw networkError;
+          }
+          error.receivedEvents = receivedEvents;
+          error.progressEvents = progressEvents;
           throw error;
         } finally {
           clearTimeout(timer);
@@ -2553,6 +2577,9 @@
           return data;
         }).catch((error) => {
           if (error?.name === "AbortError") throw new Error(`请求超时（${Math.round(timeoutMs / 1000)} 秒）`);
+          if (error?.name === "TypeError" || error?.message === "Failed to fetch") {
+            throw new Error("检测服务连接失败，请检查 API 服务或网络");
+          }
           throw error;
         }).finally(() => clearTimeout(timer));
       }
@@ -2805,6 +2832,19 @@
         return `${email}——${password}——${secret}`;
       }
 
+      function clearSubscriptionResults() {
+        currentRows = [];
+        lastCheckedInputByHash = new Map();
+        cardGrid.replaceChildren();
+        tableBody.replaceChildren();
+        technicalSummary.textContent = "查看完整技术字段";
+        errorOutput.textContent = "";
+        errorOutput.hidden = true;
+        dashboard.classList.remove("visible");
+        emptyOutput.classList.remove("hidden");
+        setExportState(false);
+      }
+
       function extractAccountInfoLine(raw) {
         const text = String(raw || "").trim();
         if (!text) return "";
@@ -2896,6 +2936,7 @@
         const text = input.value;
         if (!text.trim()) return log("没有输入，请先粘贴账号行或 AT。");
         if (checking) return;
+        clearSubscriptionResults();
         checking = true;
         startButton.disabled = true;
         parseButton.disabled = true;
@@ -2909,17 +2950,35 @@
           startProgress(probeAll, linesFromInput().length, concurrency);
           setStatus(probeAll ? "正在探测全部 endpoint，速度较慢，请耐心等待。" : "正在执行完整订阅检测。", "warning");
           log(probeAll ? "开始查询全部 backend endpoint；此模式较慢。" : "开始快速查询；首个 endpoint 失败时切换一次备用 endpoint。");
-          const data = await streamCheck(checkStreamApiUrl, { text, concurrency, probe_all: probeAll, timeout: probeAll ? 6 : 8 }, probeAll ? 180000 : 90000);
+          const requestBody = { text, concurrency, probe_all: probeAll, timeout: probeAll ? 6 : 8 };
+          let usedFallback = false;
+          let data;
+          try {
+            data = await streamCheck(checkStreamApiUrl, requestBody, probeAll ? 180000 : 90000);
+          } catch (streamError) {
+            if (streamError?.code === "STREAM_CONNECTION" && streamError.progressEvents === 0 && checkApiUrl) {
+              usedFallback = true;
+              log("流式连接未建立，正在切换普通检测接口。" );
+              setStatus("流式连接未建立，正在切换普通检测接口…", "warning");
+              data = await postJson(checkApiUrl, requestBody, probeAll ? 180000 : 120000);
+            } else {
+              throw streamError;
+            }
+          }
+          if (!data || !Array.isArray(data.rows)) throw new Error("检测服务没有返回有效结果");
           lastCheckedInputByHash = checkedInputByHash;
           renderRows(data.rows, false, data);
           setBusy("done", "ok");
           setStatus(`检测完成：Plus ${data.summary?.plus || 0}，Free ${data.summary?.free || 0}，可用 ${data.extra_summary?.account_usable_yes || 0}。`, "success");
-          log(`完成：总数 ${data.count || 0}；plus=${data.summary?.plus || 0}（失效AT推断=${data.extra_summary?.plus_inferred_from_revoked_token || 0}） free=${data.summary?.free || 0} 未验证=${data.extra_summary?.unverified || 0} 自动重试=${data.retry_count || 0} 需新登录=${data.extra_summary?.needs_fresh_login_yes || 0} Free首月免费已确认=${data.extra_summary?.free_first_month_promo_yes || 0}（候选仅展示=${data.extra_summary?.free_first_month_promo_candidate || 0}） 可用=${data.extra_summary?.account_usable_yes || 0}`);
+          log(`完成：总数 ${data.count || 0}；plus=${data.summary?.plus || 0}（失效AT推断=${data.extra_summary?.plus_inferred_from_revoked_token || 0}） free=${data.summary?.free || 0} 未验证=${data.extra_summary?.unverified || 0} 自动重试=${data.retry_count || 0} 需新登录=${data.extra_summary?.needs_fresh_login_yes || 0} Free首月免费已确认=${data.extra_summary?.free_first_month_promo_yes || 0}（候选仅展示=${data.extra_summary?.free_first_month_promo_candidate || 0}） 可用=${data.extra_summary?.account_usable_yes || 0}${usedFallback ? "（普通接口回退）" : ""}`);
           finishProgress(true, `${data.count || 0} 个账号全部完成`);
         } catch (error) {
           setBusy("check error", "bad");
-          setStatus(error.message, "error");
-          log(`查询失败：${error.message}`);
+          const message = error?.code === "STREAM_CONNECTION"
+            ? `${error.message}，请重新点击“开始检测”重试`
+            : error.message;
+          setStatus(message, "error");
+          log(`查询失败：${message}`);
           finishProgress(false, error.message);
         } finally {
           checking = false;
@@ -2941,11 +3000,7 @@
       intercept(parseButton, () => parseSubscriptionInput(false));
       intercept(clearButton, () => {
         input.value = "";
-        currentRows = [];
-        lastCheckedInputByHash = new Map();
-        cardGrid.replaceChildren();
-        tableBody.replaceChildren();
-        technicalSummary.textContent = "查看完整技术字段";
+        clearSubscriptionResults();
         clearInterval(progressTimer);
         progressTimer = null;
         progressPanel.hidden = true;

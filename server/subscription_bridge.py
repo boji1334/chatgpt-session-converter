@@ -214,6 +214,38 @@ def rows_to_csv(rows: list[dict[str, str]]) -> str:
     return buffer.getvalue()
 
 
+def worker_failure(item, error: Exception) -> tuple[dict[str, str], list[dict[str, Any]]]:
+    message = str(error).replace("\r", " ").replace("\n", " ")[:400] or "账号检测 worker 异常"
+    token_hash = checker.token_hash(item.token)
+    row = {
+        "label": item.label,
+        "line_no": str(item.line_no),
+        "token_hash": token_hash,
+        "subscription": "unknown",
+        "subscription_confidence": "unverified_worker_error",
+        "subscription_source": "worker_exception",
+        "auth_state": "error",
+        "account_usable": "unknown",
+        "ban_state": "unknown",
+        "needs_fresh_login": "unknown",
+        "first_month_free_promo": "unknown",
+        "error_code": "worker_exception",
+        "error": message,
+    }
+    diag = [{
+        "label": item.label,
+        "token_hash": token_hash,
+        "endpoint": "worker",
+        "method": "",
+        "url": "",
+        "status": 0,
+        "error_code": "worker_exception",
+        "error": message,
+        "elapsed_ms": 0,
+    }]
+    return row, diag
+
+
 def run_check(body: dict[str, Any]) -> dict[str, Any]:
     text = str(body.get("text") or "")
     items, errors, raw_count, extras_by_hash = parse_items_from_text(text)
@@ -242,8 +274,15 @@ def run_check(body: dict[str, Any]) -> dict[str, Any]:
         diagnostics: list[dict[str, Any]] = []
         workers = max(1, min(batch_concurrency, len(batch_items) or 1))
         active_endpoints = batch_endpoints or endpoints
+        def safe_check(item):
+            try:
+                return checker.check_one(item, active_endpoints, batch_timeout, None, batch_retries, {}, probe_all)
+            except Exception as error:
+                row, diagnostics = worker_failure(item, error)
+                return enrich(row), diagnostics
+
         with ThreadPoolExecutor(max_workers=workers) as executor:
-            futures = [executor.submit(checker.check_one, item, active_endpoints, batch_timeout, None, batch_retries, {}, probe_all) for item in batch_items]
+            futures = [executor.submit(safe_check, item) for item in batch_items]
             for future in as_completed(futures):
                 row, diag = future.result()
                 rows.append(enrich(row))
@@ -320,17 +359,21 @@ def run_check_stream(body: dict[str, Any], emit) -> dict[str, Any]:
         return subscription in ("", "unknown", "unverified") or error_code in ("network_error", "timeout", "request_error")
 
     def check_final(item):
-        row, diagnostics = checker.check_one(item, endpoints, timeout, None, 0, {}, probe_all)
-        row = enrich(row)
-        retried = False
-        if needs_retry(row):
-            retry_endpoints = endpoints if probe_all else [checker.DEFAULT_ENDPOINTS[1]]
-            retry_retries = 1 if probe_all else 0
-            retry_row, retry_diagnostics = checker.check_one(item, retry_endpoints, timeout, None, retry_retries, {}, probe_all)
-            row = enrich(retry_row)
-            diagnostics.extend(retry_diagnostics)
-            retried = True
-        return row, diagnostics, retried
+        try:
+            row, diagnostics = checker.check_one(item, endpoints, timeout, None, 0, {}, probe_all)
+            row = enrich(row)
+            retried = False
+            if needs_retry(row):
+                retry_endpoints = endpoints if probe_all else [checker.DEFAULT_ENDPOINTS[1]]
+                retry_retries = 1 if probe_all else 0
+                retry_row, retry_diagnostics = checker.check_one(item, retry_endpoints, timeout, None, retry_retries, {}, probe_all)
+                row = enrich(retry_row)
+                diagnostics.extend(retry_diagnostics)
+                retried = True
+            return row, diagnostics, retried
+        except Exception as error:
+            row, diagnostics = worker_failure(item, error)
+            return enrich(row), diagnostics, False
 
     rows: list[dict[str, str]] = []
     retry_count = 0

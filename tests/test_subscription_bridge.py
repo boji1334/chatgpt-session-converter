@@ -17,12 +17,12 @@ def encode_part(value):
     return base64.urlsafe_b64encode(raw).decode("ascii").rstrip("=")
 
 
-def sample_token():
+def sample_token(account_id="acct-test"):
     header = encode_part({"alg": "RS256", "typ": "JWT"})
     payload = encode_part({
         "https://api.openai.com/auth": {
             "chatgpt_plan_type": "free",
-            "chatgpt_account_id": "acct-test",
+            "chatgpt_account_id": account_id,
             "is_signup": True,
         },
         "https://api.openai.com/profile": {"email": "test@example.com"},
@@ -114,6 +114,23 @@ class SubscriptionBridgeRetryTests(unittest.TestCase):
         self.assertEqual(progress["row"]["first_month_free_promo"], "likely")
         self.assertEqual(result["retry_count"], 1)
         self.assertEqual(next(iter(calls.values())), 2)
+
+    def test_stream_isolates_worker_exception_and_still_returns_result(self):
+        def failing_check_one(item, endpoints, timeout, raw_dir, retries, extra_headers, probe_all):
+            raise RuntimeError("fixture worker failure")
+
+        events = []
+        with patch.object(bridge.checker, "check_one", side_effect=failing_check_one):
+            result = bridge.run_check_stream({
+                "text": sample_token(),
+                "concurrency": 1,
+                "timeout": 3,
+            }, events.append)
+
+        self.assertEqual(result["rows"][0]["error_code"], "worker_exception")
+        self.assertEqual(result["rows"][0]["error"], "fixture worker failure")
+        self.assertEqual(result["rows"][0]["account_usable"], "unknown")
+        self.assertEqual(events[-1]["type"], "result")
 
 
 if __name__ == "__main__":
