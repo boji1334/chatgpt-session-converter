@@ -1199,7 +1199,7 @@
           <button class="button secondary" id="prepareButton" type="button">整理识别</button>
           <button class="button secondary" id="exportCsvButton" type="button" disabled>导出 CSV</button>
           <button class="button secondary" id="exportPlusButton" type="button" disabled>导出 Plus TXT</button>
-          <button class="button secondary" id="exportPromoButton" type="button" disabled>导出已确认优惠 AT TXT</button>
+          <button class="button secondary" id="exportPromoButton" type="button" disabled>导出优惠 AT TXT</button>
           <button class="button secondary" id="exportAccountInfoButton" type="button">提取账号信息 TXT</button>
         </div>
         <div class="split-actions">
@@ -1243,7 +1243,7 @@
               <p>粘贴一条或多条 AT 后开始检测。批量账号会自动排成多列，减少滚动，也方便快速定位状态。</p>
               <div class="empty-tips" aria-label="使用提示">
                 <div class="empty-tip"><strong>01</strong><span>每行一个 AT，支持批量</span></div>
-                <div class="empty-tip"><strong>02</strong><span>可导出 CSV、Plus 和已确认优惠 AT</span></div>
+                <div class="empty-tip"><strong>02</strong><span>可导出 CSV、Plus 和优惠候选 AT</span></div>
                 <div class="empty-tip"><strong>03</strong><span>最终可用账号可一键回填</span></div>
               </div>
             </div>
@@ -1261,7 +1261,7 @@
                 <div class="subscription-stat"><div class="num" id="subscriptionParsed">0</div><div class="name">识别 AT</div></div>
                 <div class="subscription-stat plus"><div class="num" id="subscriptionPlus">0</div><div class="name" id="subscriptionPlusLabel">Plus</div></div>
                 <div class="subscription-stat free"><div class="num" id="subscriptionFree">0</div><div class="name">Free</div></div>
-                <div class="subscription-stat promo"><div class="num" id="subscriptionPromo">0</div><div class="name">Free 首月免费已确认</div></div>
+                <div class="subscription-stat promo"><div class="num" id="subscriptionPromo">0</div><div class="name">Free 首月优惠候选</div></div>
                 <div class="subscription-stat usable"><div class="num" id="subscriptionUsable">0</div><div class="name">可用</div></div>
                 <div class="subscription-stat refresh"><div class="num" id="subscriptionRefresh">0</div><div class="name">需新登录</div></div>
                 <div class="subscription-stat bad"><div class="num" id="subscriptionBad">0</div><div class="name">未验证 / 错误</div></div>
@@ -2588,6 +2588,10 @@
         return String(row?.subscription || row?.claim_subscription || "").toLowerCase();
       }
 
+      function isFirstMonthPromoCandidate(value) {
+        return ["yes", "likely"].includes(String(value || "").trim().toLowerCase());
+      }
+
       function badgeClass(value, type = "") {
         const text = String(value || "").toLowerCase();
         if (text === "plus") return "plus";
@@ -2691,7 +2695,7 @@
         appendCardChip(checks, state.label, state.chip);
         if (String(rowData.subscription_source || "").endsWith("inferred_plus")) appendCardChip(checks, "Plus 推断：未过期 AT 被撤销", "warn");
         if (rowData.first_month_free_promo === "yes") appendCardChip(checks, "首月免费已确认", "ok");
-        if (rowData.first_month_free_promo === "likely") appendCardChip(checks, "首月免费候选（不计入优惠 AT）", "warn");
+        if (rowData.first_month_free_promo === "likely") appendCardChip(checks, "首月免费候选（计入优惠 AT）", "warn");
         if (rowData.needs_fresh_login === "yes" && state.label !== "需新登录") appendCardChip(checks, "需新登录", "warn");
         if (rowData.ban_state && !["not_checked", "unknown", "none"].includes(String(rowData.ban_state).toLowerCase())) {
           appendCardChip(checks, `封禁：${rowData.ban_state}`, badgeClass(rowData.ban_state));
@@ -2742,7 +2746,7 @@
           const subscription = effectiveSubscription(rowData);
           if (subscription === "plus") plus += 1;
           if (subscription === "free") free += 1;
-          if (subscription === "free" && rowData.first_month_free_promo === "yes") promo += 1;
+          if (subscription === "free" && isFirstMonthPromoCandidate(rowData.first_month_free_promo)) promo += 1;
           if (rowData.account_usable === "yes") usable += 1;
           if (rowData.needs_fresh_login === "yes") refresh += 1;
           if (subscription.startsWith("unverified") || String(rowData.auth_state || "").includes("expired") || String(rowData.auth_state || "").includes("invalid") || rowData.error_code) bad += 1;
@@ -2902,13 +2906,13 @@
       }
 
       async function exportPromoTxt() {
-        const rows = currentRows.filter((row) => effectiveSubscription(row) === "free" && row.first_month_free_promo === "yes" && row.account_usable === "yes");
-        if (!rows.length) return log("当前结果里没有【可用 + Free + 首月免费已确认】的账号。");
+        const rows = currentRows.filter((row) => effectiveSubscription(row) === "free" && isFirstMonthPromoCandidate(row.first_month_free_promo) && row.account_usable === "yes");
+        if (!rows.length) return log("当前结果里没有【可用 + Free + 首月优惠候选】的账号。");
         const inputByHash = lastCheckedInputByHash.size ? lastCheckedInputByHash : await buildInputHashMap(input.value);
         const lines = rows.map((row) => inputByHash.get(row.token_hash)).filter(Boolean);
         if (!lines.length) return log("检测到了优惠账号，但没有在输入框中匹配到原始 AT。");
-        downloadText("free_first_month_free_confirmed_usable_full_with_at.txt", `\ufeff${lines.join("\n")}\n`);
-        log(`已导出首月免费已确认 AT TXT：${lines.length} 条。`);
+        downloadText("free_first_month_promo_candidates_usable_full_with_at.txt", `\ufeff${lines.join("\n")}\n`);
+        log(`已导出首月优惠候选 AT TXT：${lines.length} 条（明确不是优惠的账号已排除）。`);
       }
 
       async function parseSubscriptionInput(silent = false) {
@@ -2970,7 +2974,7 @@
           renderRows(data.rows, false, data);
           setBusy("done", "ok");
           setStatus(`检测完成：Plus ${data.summary?.plus || 0}，Free ${data.summary?.free || 0}，可用 ${data.extra_summary?.account_usable_yes || 0}。`, "success");
-          log(`完成：总数 ${data.count || 0}；plus=${data.summary?.plus || 0}（失效AT推断=${data.extra_summary?.plus_inferred_from_revoked_token || 0}） free=${data.summary?.free || 0} 未验证=${data.extra_summary?.unverified || 0} 自动重试=${data.retry_count || 0} 需新登录=${data.extra_summary?.needs_fresh_login_yes || 0} Free首月免费已确认=${data.extra_summary?.free_first_month_promo_yes || 0}（候选仅展示=${data.extra_summary?.free_first_month_promo_candidate || 0}） 可用=${data.extra_summary?.account_usable_yes || 0}${usedFallback ? "（普通接口回退）" : ""}`);
+          log(`完成：总数 ${data.count || 0}；plus=${data.summary?.plus || 0}（失效AT推断=${data.extra_summary?.plus_inferred_from_revoked_token || 0}） free=${data.summary?.free || 0} 未验证=${data.extra_summary?.unverified || 0} 自动重试=${data.retry_count || 0} 需新登录=${data.extra_summary?.needs_fresh_login_yes || 0} Free首月优惠候选=${data.extra_summary?.free_first_month_promo_candidate || 0}（明确确认=${data.extra_summary?.free_first_month_promo_yes || 0}） 可用=${data.extra_summary?.account_usable_yes || 0}${usedFallback ? "（普通接口回退）" : ""}`);
           finishProgress(true, `${data.count || 0} 个账号全部完成`);
         } catch (error) {
           setBusy("check error", "bad");
